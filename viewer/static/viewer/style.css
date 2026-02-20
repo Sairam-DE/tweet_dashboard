@@ -606,6 +606,8 @@ th {
 .landing-hero {
     position: relative;
     overflow: hidden;
+    --mx: 50%;
+    --my: 50%;
 }
 
 .landing-hero::before {
@@ -620,6 +622,33 @@ th {
     z-index: 0;
 }
 
+.landing-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(1px);
+    will-change: transform, opacity;
+}
+
+.landing-orb.orb-a {
+    width: clamp(180px, 22vw, 320px);
+    height: clamp(180px, 22vw, 320px);
+    top: -40px;
+    left: -30px;
+    background: radial-gradient(circle at 45% 45%, rgba(255, 66, 103, 0.35), rgba(255, 66, 103, 0.02) 70%);
+    animation: float-orb-a 10s ease-in-out infinite;
+}
+
+.landing-orb.orb-b {
+    width: clamp(150px, 18vw, 260px);
+    height: clamp(150px, 18vw, 260px);
+    top: 18%;
+    right: -20px;
+    background: radial-gradient(circle at 55% 40%, rgba(190, 11, 49, 0.38), rgba(190, 11, 49, 0.02) 68%);
+    animation: float-orb-b 12s ease-in-out infinite;
+}
+
 .landing-grid {
     position: relative;
     z-index: 1;
@@ -632,6 +661,19 @@ th {
 .landing-copy,
 .landing-preview {
     animation: rise-in 0.45s ease both;
+}
+
+[data-landing-root] [data-reveal] {
+    opacity: 0;
+    transform: translateY(16px) scale(0.988);
+    transition:
+        opacity 0.42s ease,
+        transform 0.42s ease;
+}
+
+body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 .landing-kicker {
@@ -683,6 +725,11 @@ th {
     gap: 10px;
 }
 
+.landing-bar-fill {
+    width: 0%;
+    transition: width 0.86s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .landing-preview-note {
     margin-top: 14px;
     display: flex;
@@ -719,6 +766,7 @@ th {
 
 .landing-card {
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition-delay: calc(var(--card-index, 0) * 70ms);
 }
 
 .landing-card:hover {
@@ -763,6 +811,46 @@ th {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes float-orb-a {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+        transform: translate3d(8px, -10px, 0) scale(1.04);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+@keyframes float-orb-b {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+        transform: translate3d(-8px, 12px, 0) scale(1.05);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-landing-root] [data-reveal] {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    .landing-orb {
+        animation: none;
+    }
+
+    .landing-bar-fill {
+        transition: none;
     }
 }
 

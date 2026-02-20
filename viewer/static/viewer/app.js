@@ -1,4 +1,149 @@
 (function () {
+  function parseNumber(value, fallback) {
+    var parsed = parseFloat(value);
+    if (Number.isNaN(parsed)) return fallback;
+    return parsed;
+  }
+
+  function formatCounter(value, decimals) {
+    if (decimals > 0) {
+      return value.toFixed(decimals);
+    }
+    try {
+      return Math.round(value).toLocaleString();
+    } catch (e) {
+      return String(Math.round(value));
+    }
+  }
+
+  function animateCounter(counter, immediate) {
+    if (!counter || counter.dataset.counterAnimated === "1") return;
+    counter.dataset.counterAnimated = "1";
+
+    var rawTarget = counter.getAttribute("data-count-to") || counter.textContent || "0";
+    var target = parseNumber(rawTarget, 0);
+    var decimals = rawTarget.indexOf(".") !== -1 ? 1 : 0;
+
+    if (immediate) {
+      counter.textContent = formatCounter(target, decimals);
+      return;
+    }
+
+    var duration = 900;
+    var startTime = null;
+    var startValue = 0;
+
+    function tick(timestamp) {
+      if (startTime === null) startTime = timestamp;
+      var elapsed = timestamp - startTime;
+      var progress = Math.min(elapsed / duration, 1);
+      var eased = 1 - Math.pow(1 - progress, 3);
+      var current = startValue + (target - startValue) * eased;
+      counter.textContent = formatCounter(current, decimals);
+      if (progress < 1) {
+        window.requestAnimationFrame(tick);
+      }
+    }
+
+    counter.textContent = "0";
+    window.requestAnimationFrame(tick);
+  }
+
+  function animateLandingBars(scope, immediate) {
+    if (!scope) return;
+    var bars = scope.querySelectorAll(".landing-bar-fill[data-width]");
+    bars.forEach(function (bar, index) {
+      if (bar.dataset.barAnimated === "1") return;
+      bar.dataset.barAnimated = "1";
+      var width = Math.max(0, Math.min(parseNumber(bar.getAttribute("data-width"), 0), 100));
+      if (immediate) {
+        bar.style.width = width + "%";
+        return;
+      }
+      window.setTimeout(function () {
+        bar.style.width = width + "%";
+      }, 110 + index * 90);
+    });
+  }
+
+  function revealDelay(node) {
+    var raw = node.getAttribute("data-reveal-delay");
+    if (raw !== null && raw !== "") {
+      return Math.max(0, parseInt(raw, 10) || 0);
+    }
+    var indexFromStyle = parseInt((node.style.getPropertyValue("--card-index") || "0").trim(), 10) || 0;
+    return Math.max(0, indexFromStyle * 70);
+  }
+
+  function revealNode(node, immediate) {
+    if (!node || node.dataset.revealed === "1") return;
+    node.dataset.revealed = "1";
+
+    var makeVisible = function () {
+      node.classList.add("is-visible");
+      if (node.hasAttribute("data-counter-group")) {
+        node.querySelectorAll(".landing-counter[data-count-to]").forEach(function (counter) {
+          animateCounter(counter, immediate);
+        });
+      }
+      if (node.hasAttribute("data-bar-group")) {
+        animateLandingBars(node, immediate);
+      }
+    };
+
+    if (immediate) {
+      makeVisible();
+      return;
+    }
+
+    window.setTimeout(makeVisible, revealDelay(node));
+  }
+
+  function initLandingMotion() {
+    var root = document.querySelector("[data-landing-root]");
+    if (!root) return;
+
+    var prefersReducedMotion = false;
+    try {
+      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      prefersReducedMotion = false;
+    }
+
+    document.body.classList.add("landing-motion-ready");
+    var revealNodes = root.querySelectorAll("[data-reveal]");
+    if (!revealNodes.length) return;
+
+    if (prefersReducedMotion || !("IntersectionObserver" in window)) {
+      revealNodes.forEach(function (node) {
+        revealNode(node, true);
+      });
+      root.querySelectorAll(".landing-counter[data-count-to]").forEach(function (counter) {
+        animateCounter(counter, true);
+      });
+      animateLandingBars(root, true);
+      return;
+    }
+
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          revealNode(entry.target, false);
+          observer.unobserve(entry.target);
+        });
+      },
+      {
+        threshold: 0.15,
+        rootMargin: "0px 0px -6% 0px",
+      }
+    );
+
+    revealNodes.forEach(function (node) {
+      observer.observe(node);
+    });
+  }
+
   function initSentimentWidget(widget) {
     if (!widget) return;
 
@@ -140,6 +285,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    initLandingMotion();
     document.querySelectorAll(".sentiment-widget").forEach(initSentimentWidget);
   });
 })();

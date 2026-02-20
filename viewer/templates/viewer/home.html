@@ -3,9 +3,11 @@
 {% block title %}PulseBoard | X Intelligence Platform{% endblock %}
 
 {% block content %}
-<section class="landing-hero">
+<section class="landing-hero" data-landing-root>
+    <div class="landing-orb orb-a" aria-hidden="true"></div>
+    <div class="landing-orb orb-b" aria-hidden="true"></div>
     <div class="landing-grid">
-        <div class="landing-copy">
+        <div class="landing-copy" data-reveal data-reveal-delay="70">
             <p class="landing-kicker">Professional X Intelligence Platform</p>
             <h1 class="landing-title">Turn public X conversations into clear, decision-ready insight.</h1>
             <p class="muted landing-intro">
@@ -22,36 +24,36 @@
                 {% endif %}
             </div>
 
-            <div class="landing-metrics">
-                <div class="metric-card">
+            <div class="landing-metrics" data-reveal data-reveal-delay="180" data-counter-group>
+                <div class="metric-card" data-reveal data-reveal-delay="220">
                     <div class="label">Example events</div>
-                    <div class="value">{{ total_events }}</div>
+                    <div class="value landing-counter" data-count-to="{{ total_events }}">{{ total_events }}</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-reveal data-reveal-delay="260">
                     <div class="label">Example runs</div>
-                    <div class="value">{{ total_runs }}</div>
+                    <div class="value landing-counter" data-count-to="{{ total_runs }}">{{ total_runs }}</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-reveal data-reveal-delay="300">
                     <div class="label">Tweets analyzed</div>
-                    <div class="value">{{ total_tweets }}</div>
+                    <div class="value landing-counter" data-count-to="{{ total_tweets }}">{{ total_tweets }}</div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-reveal data-reveal-delay="340">
                     <div class="label">Non-empty runs</div>
-                    <div class="value">{{ non_empty_runs }}</div>
+                    <div class="value landing-counter" data-count-to="{{ non_empty_runs }}">{{ non_empty_runs }}</div>
                 </div>
             </div>
         </div>
 
-        <div class="panel landing-preview">
+        <div class="panel landing-preview" data-reveal data-reveal-delay="120">
             <h2>Live Insight Preview</h2>
             <p class="muted" style="margin-top: 6px;">This snapshot is preloaded as an example for new users.</p>
             {% if sentiment_total %}
-                <div class="landing-sentiment">
+                <div class="landing-sentiment" data-bar-group>
                     {% for row in sentiment_rows %}
-                        <div class="bar-row">
+                        <div class="bar-row" data-reveal style="--reveal-delay: {{ forloop.counter0 }};">
                             <span>{{ row.label }}</span>
                             <div class="bar-track">
-                                <div class="bar-fill {{ row.css }}" style="width: {{ row.pct }}%;"></div>
+                                <div class="bar-fill {{ row.css }} landing-bar-fill" data-width="{{ row.pct }}"></div>
                             </div>
                             <span>{{ row.pct }}%</span>
                         </div>
@@ -82,11 +84,11 @@
     </div>
 </section>
 
-<section class="landing-section">
+<section class="landing-section" data-reveal data-reveal-delay="80">
     <h2>What This Tool Does</h2>
     <div class="landing-card-grid">
         {% for card in capability_cards %}
-            <article class="panel landing-card">
+            <article class="panel landing-card" data-reveal style="--card-index: {{ forloop.counter0 }};">
                 <h3>{{ card.title }}</h3>
                 <p class="muted">{{ card.body }}</p>
             </article>
@@ -95,7 +97,7 @@
 </section>
 
 <section class="landing-section landing-two-col">
-    <article class="panel">
+    <article class="panel" data-reveal data-reveal-delay="60">
         <h2>What You Can Achieve</h2>
         <ul class="landing-list">
             {% for item in outcomes %}
@@ -103,7 +105,7 @@
             {% endfor %}
         </ul>
     </article>
-    <article class="panel">
+    <article class="panel" data-reveal data-reveal-delay="140">
         <h2>What We Have Built</h2>
         <ul class="landing-list">
             {% for item in built_stack %}
@@ -114,7 +116,7 @@
 </section>
 
 <section class="landing-section">
-    <div class="panel">
+    <div class="panel" data-reveal data-reveal-delay="60">
         <h2>Recent Example Runs</h2>
         <p class="muted" style="margin-top: 6px;">
             New users see this style of sample data first, then collect their own event runs.
