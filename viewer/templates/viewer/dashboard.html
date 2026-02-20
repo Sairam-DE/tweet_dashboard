@@ -208,7 +208,7 @@
                                 data-count="{{ row.count }}"
                                 data-pct="{{ row.pct }}"
                                 data-tone="{{ row.css }}"
-                                href="/?event={{ selected_event|urlencode }}&sentiment={{ row.label|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset=0#tweet-browser"
+                                href="{% url 'dashboard' %}?event={{ selected_event|urlencode }}&sentiment={{ row.label|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset=0#tweet-browser"
                             >
                             <span>{{ row.label }}</span>
                             <div class="bar-track">
@@ -271,7 +271,7 @@
                 <button type="submit" class="btn btn-primary">Apply Filters</button>
                 <a
                     class="btn btn-secondary"
-                    href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&export=csv#tweet-browser"
+                    href="{% url 'dashboard' %}?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&export=csv#tweet-browser"
                 >
                     Export CSV
                 </a>
@@ -282,10 +282,10 @@
 
         <div style="display:flex; gap:10px; margin-top: 12px; flex-wrap:wrap;">
             {% if browser_offset > 0 %}
-                <a class="btn btn-ghost" href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_prev_offset }}#tweet-browser">Prev</a>
+                <a class="btn btn-ghost" href="{% url 'dashboard' %}?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_prev_offset }}#tweet-browser">Prev</a>
             {% endif %}
             {% if browser_has_next %}
-                <a class="btn btn-ghost" href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_next_offset }}#tweet-browser">Next</a>
+                <a class="btn btn-ghost" href="{% url 'dashboard' %}?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_next_offset }}#tweet-browser">Next</a>
             {% endif %}
         </div>
 

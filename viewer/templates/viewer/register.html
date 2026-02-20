@@ -5,6 +5,9 @@
 {% block content %}
 <section class="auth-shell">
     <div class="auth-panel">
+        <p class="muted" style="margin: 0 0 8px;">
+            Want a quick preview first? <a href="{% url 'home' %}">View product overview</a>
+        </p>
         <h1 style="font-size: 30px;">Create Account</h1>
         <p class="muted" style="margin-top: 6px;">Sign up to manage queries and browse dashboards.</p>
         <form method="post" style="margin-top: 14px;">
@@ -29,4 +32,3 @@
     </div>
 </section>
 {% endblock %}
-

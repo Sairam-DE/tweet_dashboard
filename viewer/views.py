@@ -13,6 +13,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import CollectQueryForm, RegistrationForm
@@ -683,6 +684,48 @@ def logout_view(request):
     return redirect("login")
 
 
+def home(request):
+    snapshot = _dataset_snapshot("all", data_dir=EXAMPLE_DATA_DIR)
+    capability_cards = [
+        {
+            "title": "Collect From X API",
+            "body": "Run keyword, date, and event-based collection directly from the UI with secure token handling.",
+        },
+        {
+            "title": "Understand Sentiment Instantly",
+            "body": "VADER scoring classifies tweets into positive, neutral, and negative with interactive charts.",
+        },
+        {
+            "title": "Explore With Analyst Controls",
+            "body": "Filter by sentiment, text, and user, inspect run files, and export focused CSV slices.",
+        },
+        {
+            "title": "Onboard Users Faster",
+            "body": "Each new user gets a private workspace auto-seeded with example data to learn before scraping.",
+        },
+    ]
+    outcomes = [
+        "Track public perception around people, products, and campaigns.",
+        "Compare engagement and sentiment trends across date ranges.",
+        "Spot top languages, top voices, and high-signal tweet samples.",
+        "Move from raw tweets to dashboard-ready insights in one place.",
+    ]
+    built_stack = [
+        "Django-based product with authentication and role-ready architecture.",
+        "Responsive black-and-red experience optimized for desktop and mobile.",
+        "Interactive sentiment dashboard with hover insights and click-through tweet filtering.",
+        "Persistent deployment model for production hosting on Render.",
+    ]
+    context = {
+        **snapshot,
+        "example_data_dir": str(EXAMPLE_DATA_DIR),
+        "capability_cards": capability_cards,
+        "outcomes": outcomes,
+        "built_stack": built_stack,
+    }
+    return render(request, "viewer/home.html", context)
+
+
 @login_required
 def dashboard(request):
     initial_event = request.GET.get("event")
@@ -719,7 +762,7 @@ def collect_query(request):
         run_filename = _run_collection(query, since, until, event, token, user_data_dir)
     except Exception as exc:
         messages.error(request, f"Collection failed: {exc}")
-        return redirect(f"/?event={event}")
+        return redirect(f"{reverse('dashboard')}?event={event}")
 
     messages.success(request, f"Collection completed. New run: {run_filename}")
     return redirect("run_detail", event=event, filename=run_filename)
