@@ -1,0 +1,32 @@
+{% extends "viewer/base.html" %}
+
+{% block title %}Register | PulseBoard{% endblock %}
+
+{% block content %}
+<section class="auth-shell">
+    <div class="auth-panel">
+        <h1 style="font-size: 30px;">Create Account</h1>
+        <p class="muted" style="margin-top: 6px;">Sign up to manage queries and browse dashboards.</p>
+        <form method="post" style="margin-top: 14px;">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field" style="margin-bottom: 10px;">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="help">{{ field.help_text|safe }}</div>{% endif %}
+                    {% if field.errors %}
+                        <ul class="error-list">
+                            {% for error in field.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            <button class="btn btn-primary" type="submit">Create Account</button>
+        </form>
+        <p class="muted" style="margin-top: 10px;">Already registered? <a href="{% url 'login' %}">Login</a></p>
+    </div>
+</section>
+{% endblock %}
+

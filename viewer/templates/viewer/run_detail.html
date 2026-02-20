@@ -1,0 +1,168 @@
+{% extends "viewer/base.html" %}
+
+{% block title %}Run Detail | {{ filename }}{% endblock %}
+
+{% block content %}
+<section class="two-col">
+    <div class="panel">
+        <h2>Event Runs: {{ event }}</h2>
+        <div class="table-wrap" style="max-height: 560px; margin-top: 12px;">
+            <table>
+                <thead>
+                    <tr><th>Run file</th><th>Size</th></tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'run_detail' event run.file_name %}">
+                                    {% if run.file_name == filename %}<strong>{{ run.file_name }}</strong>{% else %}{{ run.file_name }}{% endif %}
+                                </a>
+                            </td>
+                            <td>{{ run.size }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="2" class="muted">No runs found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top: 12px;">
+            <a class="btn btn-ghost" href="{% url 'dashboard' %}">Back to dashboard</a>
+        </div>
+    </div>
+
+    <div>
+        <div class="panel">
+            <h1 style="font-size: 24px;">{{ filename }}</h1>
+            <div class="metrics" style="margin-top: 12px; grid-template-columns: repeat(3, minmax(0,1fr));">
+                <div class="metric-card">
+                    <div class="label">JSON size</div>
+                    <div class="value">{{ json_size }}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Rows parsed</div>
+                    <div class="value">{{ total_rows }}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Parse errors</div>
+                    <div class="value">{{ parse_errors }}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">CSV rows</div>
+                    <div class="value">{% if csv_rows is not None %}{{ csv_rows }}{% else %}n/a{% endif %}</div>
+                </div>
+                <div class="metric-card" style="grid-column: span 2;">
+                    <div class="label">CSV path</div>
+                    <div class="value" style="font-size:13px; font-weight:600;">{% if csv_path %}{{ csv_path }}{% else %}not found{% endif %}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top: 16px;">
+            <h2>Sentiment (VADER)</h2>
+            {% if sentiment_total %}
+                <div class="sentiment-widget" data-widget="sentiment" data-total="{{ sentiment_total }}" data-selected="{{ sentiment_filter }}" style="margin-top: 10px;">
+                    <div class="sentiment-split">
+                        <div class="pie" style="--pos: {{ sentiment_pie.pos }}%; --pos-neu: {{ sentiment_pie.pos_neu }}%;">
+                            <div class="pie-center">
+                                <div class="pie-center-label" data-pie-label>All tweets</div>
+                                <div class="pie-center-value" data-pie-value>{{ sentiment_total }}</div>
+                                <div class="pie-center-extra muted" data-pie-extra></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="bar-list sentiment-bars">
+                                {% for row in sentiment_rows %}
+                                    <a
+                                        class="bar-row"
+                                        data-sentiment-row="1"
+                                        data-label="{{ row.label }}"
+                                        data-count="{{ row.count }}"
+                                        data-pct="{{ row.pct }}"
+                                        data-tone="{{ row.css }}"
+                                        href="?sentiment={{ row.label|urlencode }}&q={{ text_filter|urlencode }}&limit={{ limit }}"
+                                    >
+                                        <span>{{ row.label }}</span>
+                                        <div class="bar-track">
+                                            <div class="bar-fill {{ row.css }}" style="width: {{ row.pct }}%;"></div>
+                                        </div>
+                                        <span>{{ row.count }}</span>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                            <div class="sentiment-hover" data-sentiment-hover>
+                                <div class="sentiment-hover-label" data-hover-label>Hover a sentiment</div>
+                                <div class="sentiment-hover-meta muted" data-hover-meta>Click a bar to filter the table below.</div>
+                                <div class="sentiment-hover-mini">
+                                    <div class="sentiment-hover-fill" data-hover-fill style="width:0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <p class="muted" style="margin-top: 10px;">No tweets found for sentiment analysis.</p>
+            {% endif %}
+        </div>
+
+        <div class="panel" style="margin-top: 16px;">
+            <h2>Tweet Preview</h2>
+            <form method="get" style="margin: 10px 0; display:flex; gap:8px; flex-wrap:wrap;">
+                <select name="sentiment" class="chip" style="padding:9px 10px;">
+                    <option value="" {% if not sentiment_filter %}selected{% endif %}>All sentiments</option>
+                    <option value="Positive" {% if sentiment_filter == "Positive" %}selected{% endif %}>Positive</option>
+                    <option value="Neutral" {% if sentiment_filter == "Neutral" %}selected{% endif %}>Neutral</option>
+                    <option value="Negative" {% if sentiment_filter == "Negative" %}selected{% endif %}>Negative</option>
+                </select>
+                <input type="text" name="q" value="{{ text_filter }}" placeholder="Filter text contains..." style="flex:1; min-width:220px; border:1px solid var(--line); border-radius:8px; padding:9px 10px;">
+                <input type="number" name="limit" value="{{ limit }}" min="20" max="1500" style="width:120px; border:1px solid var(--line); border-radius:8px; padding:9px 10px;">
+                <button class="btn btn-primary" type="submit">Apply</button>
+                <a class="btn btn-secondary" href="?sentiment={{ sentiment_filter|urlencode }}&q={{ text_filter|urlencode }}&export=csv">Export CSV</a>
+            </form>
+            <div class="table-wrap" style="max-height: 540px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Lang</th>
+                            <th>Likes</th>
+                            <th>Retweets</th>
+                            <th>Sentiment</th>
+                            <th>Text</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in preview_rows %}
+                            <tr>
+                                <td>{{ row.id }}</td>
+                                <td>{{ row.date }}</td>
+                                <td>{{ row.username }}</td>
+                                <td>{{ row.lang }}</td>
+                                <td>{{ row.likes }}</td>
+                                <td>{{ row.retweets }}</td>
+                                <td>
+                                    <span class="pill sent-{{ row.sentiment|lower }}">{{ row.sentiment }}</span>
+                                    <div class="muted" style="font-size: 11px; margin-top: 4px;">{{ row.compound }}</div>
+                                </td>
+                                <td>{{ row.text }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="8" class="muted">No matching rows found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if log_tail %}
+            <div class="panel" style="margin-top: 16px;">
+                <h2>Collector Log Tail</h2>
+                <pre class="collector-log">{{ log_tail }}</pre>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+.env
+.env.*
+staticfiles/
+
+# Django uploads and generated artifacts
+media/
+*.log
+
+# Keep scraped tweets, but skip per-run request logs
+data/**/jsons/*.log

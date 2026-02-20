@@ -1,0 +1,46 @@
+{% load static %}
+{% now "U" as css_v %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PulseBoard{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'viewer/style.css' %}?v={{ css_v }}">
+    <script defer src="{% static 'viewer/app.js' %}?v={{ css_v }}"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a href="{% url 'dashboard' %}" class="title">PulseBoard</a>
+                <span class="tag">X Data Console</span>
+            </div>
+            <nav class="nav-links">
+                {% if user.is_authenticated %}
+                    <span class="chip">{{ user.username }}</span>
+                    <a class="btn btn-ghost" href="{% url 'dashboard' %}">Dashboard</a>
+                    <a class="btn btn-ghost" href="{% url 'logout' %}">Logout</a>
+                {% else %}
+                    <a class="btn btn-ghost" href="{% url 'login' %}">Login</a>
+                    <a class="btn btn-primary" href="{% url 'register' %}">Register</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="page">
+        {% if messages %}
+            <div class="flash-list">
+                {% for message in messages %}
+                    <div class="flash {% if message.tags %}{{ message.tags }}{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

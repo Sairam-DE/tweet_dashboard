@@ -1,0 +1,365 @@
+{% extends "viewer/base.html" %}
+
+{% block title %}Dashboard | PulseBoard{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="panel">
+        <h1 class="hero-title">Tweet Intelligence Dashboard</h1>
+        <p class="muted">
+            Explore scraped data, submit new collection queries, and review run quality from one interface.
+            Data root: <code>{{ data_dir }}</code>
+        </p>
+
+        <form method="get" style="margin-top: 14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label for="event_filter" class="muted" style="font-weight:600;">Scope</label>
+            <select id="event_filter" name="event" class="chip" style="padding:8px 10px;">
+                <option value="all" {% if selected_event == "all" %}selected{% endif %}>All events</option>
+                {% for event_name in event_names %}
+                    <option value="{{ event_name }}" {% if selected_event == event_name %}selected{% endif %}>{{ event_name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-ghost">Apply</button>
+        </form>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="label">Events</div>
+                <div class="value">{{ total_events }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Runs</div>
+                <div class="value">{{ total_runs }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Tweets</div>
+                <div class="value">{{ total_tweets }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Non-empty runs</div>
+                <div class="value">{{ non_empty_runs }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Avg likes / tweet</div>
+                <div class="value">{{ avg_likes }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Avg retweets / tweet</div>
+                <div class="value">{{ avg_retweets }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Total likes</div>
+                <div class="value">{{ total_likes }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Total retweets</div>
+                <div class="value">{{ total_retweets }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Run New Query</h2>
+        <p class="muted" style="margin-top: 6px;">
+            Submit a scrape query directly from the UI. Requires valid X API token in server env or form override.
+        </p>
+        <form method="post" action="{% url 'collect_query' %}" style="margin-top:12px;">
+            {% csrf_token %}
+            <input type="hidden" name="event_filter" value="{{ selected_event }}">
+            <div class="form-grid">
+                {% for field in query_form %}
+                    <div class="field" {% if field.name == "query" or field.name == "bearer_token" %}style="grid-column: 1 / -1;"{% endif %}>
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}
+                            <ul class="error-list">
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% if query_form.non_field_errors %}
+                <ul class="error-list" style="margin-top:8px;">
+                    {% for error in query_form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            <div style="display:flex; gap:10px; margin-top: 12px;">
+                <button type="submit" class="btn btn-primary">Collect Now</button>
+                <span class="chip">Parse issues: {{ parse_errors }}</span>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="two-col">
+    <div class="panel">
+        <h2>Tweet Volume Trend</h2>
+        <p class="muted" style="margin: 6px 0 10px;">Daily distribution (latest 14 days in dataset)</p>
+        {% if trend_points %}
+            <div class="bar-list">
+                {% for point in trend_points %}
+                    <div class="bar-row">
+                        <span>{{ point.label }}</span>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: {{ point.pct }}%;"></div>
+                        </div>
+                        <span>{{ point.value }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted">No tweet trend data found.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Top Languages</h2>
+        <div class="table-wrap" style="max-height: 320px;">
+            <table>
+                <thead>
+                    <tr><th>Language</th><th>Count</th></tr>
+                </thead>
+                <tbody>
+                    {% for lang, count in top_languages %}
+                        <tr><td>{{ lang }}</td><td>{{ count }}</td></tr>
+                    {% empty %}
+                        <tr><td colspan="2" class="muted">No language data.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h2 style="margin-top: 14px;">Top Users</h2>
+        <div class="table-wrap" style="max-height: 320px;">
+            <table>
+                <thead>
+                    <tr><th>User</th><th>Tweets</th></tr>
+                </thead>
+                <tbody>
+                    {% for username, count in top_users %}
+                        <tr><td>{{ username }}</td><td>{{ count }}</td></tr>
+                    {% empty %}
+                        <tr><td colspan="2" class="muted">No user data.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="three-col">
+    <div class="panel" style="grid-column: 1 / span 2;">
+        <h2>Recent Runs</h2>
+        <div class="table-wrap" style="max-height: 360px; margin-top: 10px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Run File</th>
+                        <th>Tweets</th>
+                        <th>Size</th>
+                        <th>Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent_runs %}
+                        <tr>
+                            <td>{{ run.event }}</td>
+                            <td><a href="{% url 'run_detail' run.event run.file_name %}">{{ run.file_name }}</a></td>
+                            <td>{{ run.tweet_count|default:"-" }}</td>
+                            <td>{{ run.size }}</td>
+                            <td>{{ run.updated_at }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="muted">No runs found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="panel">
+        <h2>Sentiment (VADER)</h2>
+        <p class="muted" style="margin: 6px 0 10px;">
+            Positive / neutral / negative from VADER compound score (thresholds +0.4 / -0.4).
+        </p>
+        {% if sentiment_total %}
+            <div class="sentiment-widget" data-widget="sentiment" data-total="{{ sentiment_total }}" data-selected="{{ browser_sentiment }}">
+                <div class="sentiment-split">
+                    <div class="pie" style="--pos: {{ sentiment_pie.pos }}%; --pos-neu: {{ sentiment_pie.pos_neu }}%;">
+                        <div class="pie-center">
+                            <div class="pie-center-label" data-pie-label>All tweets</div>
+                            <div class="pie-center-value" data-pie-value>{{ sentiment_total }}</div>
+                            <div class="pie-center-extra muted" data-pie-extra></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bar-list sentiment-bars">
+                    {% for row in sentiment_rows %}
+                            <a
+                                class="bar-row"
+                                data-sentiment-row="1"
+                                data-label="{{ row.label }}"
+                                data-count="{{ row.count }}"
+                                data-pct="{{ row.pct }}"
+                                data-tone="{{ row.css }}"
+                                href="/?event={{ selected_event|urlencode }}&sentiment={{ row.label|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset=0#tweet-browser"
+                            >
+                            <span>{{ row.label }}</span>
+                            <div class="bar-track">
+                                <div class="bar-fill {{ row.css }}" style="width: {{ row.pct }}%;"></div>
+                            </div>
+                            <span>{{ row.count }}</span>
+                            </a>
+                    {% endfor %}
+                        </div>
+                        <div class="sentiment-hover" data-sentiment-hover>
+                            <div class="sentiment-hover-label" data-hover-label>Hover a sentiment</div>
+                            <div class="sentiment-hover-meta muted" data-hover-meta>Click a bar to filter tweets below.</div>
+                            <div class="sentiment-hover-mini">
+                                <div class="sentiment-hover-fill" data-hover-fill style="width:0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No tweets found for sentiment analysis.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section id="tweet-browser" style="margin-top: 16px;">
+    <div class="panel">
+        <h2>Tweet Browser</h2>
+        <p class="muted" style="margin: 6px 0 12px;">
+            Filter across the selected scope (<code>{{ selected_event }}</code>). Click a sentiment bar above to jump here.
+        </p>
+
+        <form method="get">
+            <input type="hidden" name="event" value="{{ selected_event }}">
+            <input type="hidden" name="offset" value="0">
+            <div class="form-grid">
+                <div class="field">
+                    <label for="browser_sentiment">Sentiment</label>
+                    <select id="browser_sentiment" name="sentiment">
+                        <option value="" {% if not browser_sentiment %}selected{% endif %}>All</option>
+                        <option value="Positive" {% if browser_sentiment == "Positive" %}selected{% endif %}>Positive</option>
+                        <option value="Neutral" {% if browser_sentiment == "Neutral" %}selected{% endif %}>Neutral</option>
+                        <option value="Negative" {% if browser_sentiment == "Negative" %}selected{% endif %}>Negative</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="browser_q">Text contains</label>
+                    <input id="browser_q" type="text" name="q" value="{{ browser_q }}" placeholder="e.g. iphone, pawan kalyan">
+                </div>
+                <div class="field">
+                    <label for="browser_user">Username contains</label>
+                    <input id="browser_user" type="text" name="user" value="{{ browser_user }}" placeholder="e.g. user123">
+                </div>
+                <div class="field">
+                    <label for="browser_limit">Limit</label>
+                    <input id="browser_limit" type="number" name="limit" min="20" max="800" value="{{ browser_limit }}">
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top: 12px; flex-wrap:wrap; align-items:center;">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a
+                    class="btn btn-secondary"
+                    href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&export=csv#tweet-browser"
+                >
+                    Export CSV
+                </a>
+                <span class="chip">offset: {{ browser_offset }}</span>
+                {% if browser_sentiment %}<span class="pill sent-{{ browser_sentiment|lower }}">sentiment: {{ browser_sentiment }}</span>{% endif %}
+            </div>
+        </form>
+
+        <div style="display:flex; gap:10px; margin-top: 12px; flex-wrap:wrap;">
+            {% if browser_offset > 0 %}
+                <a class="btn btn-ghost" href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_prev_offset }}#tweet-browser">Prev</a>
+            {% endif %}
+            {% if browser_has_next %}
+                <a class="btn btn-ghost" href="/?event={{ selected_event|urlencode }}&sentiment={{ browser_sentiment|default_if_none:''|urlencode }}&q={{ browser_q|urlencode }}&user={{ browser_user|urlencode }}&limit={{ browser_limit }}&offset={{ browser_next_offset }}#tweet-browser">Next</a>
+            {% endif %}
+        </div>
+
+        <div class="table-wrap" style="max-height: 560px; margin-top: 12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Run</th>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Sentiment</th>
+                        <th>Likes</th>
+                        <th>Retweets</th>
+                        <th>Text</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in browser_rows %}
+                        <tr>
+                            <td>{{ row.event }}</td>
+                            <td><a href="{% url 'run_detail' row.event row.run_file %}">{{ row.run_file }}</a></td>
+                            <td>{{ row.date }}</td>
+                            <td>{{ row.username }}</td>
+                            <td>
+                                <span class="pill sent-{{ row.sentiment|lower }}">{{ row.sentiment }}</span>
+                                <div class="muted" style="font-size: 11px; margin-top: 4px;">{{ row.compound }}</div>
+                            </td>
+                            <td>{{ row.likes }}</td>
+                            <td>{{ row.retweets }}</td>
+                            <td>{{ row.text }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="muted">No tweets matched your filters.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section style="margin-top: 16px;">
+    <div class="panel">
+        <h2>Event Explorer</h2>
+        <div class="run-grid" style="margin-top: 12px;">
+            {% for event in event_cards %}
+                <div class="event-card">
+                    <h3>{{ event.name }}</h3>
+                    <div class="meta">
+                        <span class="pill">runs: {{ event.run_count }}</span>
+                        <span class="pill">non-empty: {{ event.non_empty_count }}</span>
+                        <span class="pill warn">tweets: {{ event.tweet_count }}</span>
+                    </div>
+                    <div class="table-wrap" style="max-height: 210px; margin-top: 10px;">
+                        <table>
+                            <thead>
+                                <tr><th>Run</th><th>Tweets</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for run in event.runs %}
+                                    <tr>
+                                        <td><a href="{% url 'run_detail' event.name run.file_name %}">{{ run.file_name }}</a></td>
+                                        <td>{{ run.tweet_count|default:"-" }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="2" class="muted">No runs</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% empty %}
+                <p class="muted">No events found.</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

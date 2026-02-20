@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: pulseboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
+    startCommand: gunicorn dashboard_site.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com,127.0.0.1,localhost"
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
