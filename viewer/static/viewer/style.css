@@ -672,9 +672,11 @@ th {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: 1.25fr 0.75fr;
-    gap: 16px;
+    grid-template-columns: 1fr;
+    gap: 18px;
     align-items: start;
+    max-width: 1040px;
+    margin: 0 auto;
 }
 
 .landing-copy,
@@ -778,15 +780,19 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
 .landing-chart-grid {
     margin-top: 12px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .chart-card {
     border: 1px solid var(--line);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.02);
-    padding: 12px;
+    padding: 14px;
+    min-height: 170px;
 }
 
 .chart-card h3 {
@@ -1067,8 +1073,11 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
 .landing-card-grid {
     margin-top: 12px;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .landing-card {
@@ -1076,6 +1085,8 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
     transition-delay: calc(var(--card-index, 0) * 70ms);
     transform-style: preserve-3d;
     will-change: transform;
+    min-height: 140px;
+    padding: 18px;
 }
 
 .landing-card:hover {
@@ -1095,8 +1106,10 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
 
 .landing-two-col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 16px;
+    max-width: 860px;
+    margin: 0 auto;
 }
 
 .landing-list {

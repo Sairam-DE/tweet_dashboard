@@ -134,8 +134,8 @@
         });
       },
       {
-        threshold: 0.15,
-        rootMargin: "0px 0px -6% 0px",
+        threshold: 0.28,
+        rootMargin: "0px 0px -20% 0px",
       }
     );
 
