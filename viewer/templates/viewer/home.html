@@ -52,49 +52,77 @@
         </div>
 
         <div class="panel landing-preview" data-reveal data-reveal-delay="120">
-            <h2>Live Insight Preview</h2>
-            <p class="muted" style="margin-top: 6px;">This snapshot is preloaded as an example for new users.</p>
-            {% if sentiment_total %}
-                <div class="landing-sentiment" data-bar-group>
-                    {% for row in sentiment_rows %}
-                        <div class="bar-row" data-reveal style="--reveal-delay: {{ forloop.counter0 }};">
-                            <span>{{ row.label }}</span>
-                            <div class="bar-track">
-                                <div class="bar-fill {{ row.css }} landing-bar-fill" data-width="{{ row.pct }}"></div>
+            <h2>Insight Motion Board</h2>
+            <p class="muted" style="margin-top: 6px;">Animated data themes from the sample intelligence layer.</p>
+            <div class="landing-chart-grid">
+                <article class="chart-card" data-reveal data-reveal-delay="160" data-counter-group>
+                    <h3>Run Quality</h3>
+                    <div class="chart-ring-shell">
+                        <div class="chart-ring" data-pie-progress data-target="{{ run_quality_pct }}"></div>
+                        <div class="chart-ring-center">
+                            <div class="chart-ring-value">
+                                <span class="landing-counter" data-count-to="{{ run_quality_pct }}">{{ run_quality_pct }}</span>
+                                <span class="chart-ring-unit">%</span>
                             </div>
-                            <span>{{ row.pct }}%</span>
+                            <div class="chart-ring-label">non-empty runs</div>
                         </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="landing-empty">
-                    <p class="landing-empty-title">No sample sentiment is loaded yet.</p>
-                    <p class="muted" style="margin-top: 6px;">
-                        As soon as an example run is available, this card will show sentiment split and trend indicators.
-                    </p>
-                    <ul class="landing-list landing-list-compact">
-                        <li>Login and open your private workspace.</li>
-                        <li>Run a query with topic + date range.</li>
-                        <li>Get sentiment, top users, and exportable insights instantly.</li>
-                    </ul>
-                </div>
-            {% endif %}
+                    </div>
+                    <p class="muted chart-note">{{ non_empty_runs }} non-empty / {{ total_runs }} total runs</p>
+                </article>
 
-            <div class="landing-console" data-reveal data-reveal-delay="180">
-                <div class="console-head">
-                    <div class="console-dots">
-                        <span></span><span></span><span></span>
+                <article class="chart-card" data-reveal data-reveal-delay="220" data-counter-group>
+                    <h3>Sentiment Pie</h3>
+                    <div class="chart-pie" data-pie-spin style="--pos: {{ home_sentiment_pie.pos }}%; --pos-neu: {{ home_sentiment_pie.pos_neu }}%;">
+                        <div class="chart-pie-center">
+                            {% if sentiment_total %}
+                                <span class="landing-counter" data-count-to="{{ sentiment_total }}">{{ sentiment_total }}</span>
+                                <small>tweets scored</small>
+                            {% else %}
+                                <span>Demo</span>
+                                <small>awaiting tweets</small>
+                            {% endif %}
+                        </div>
                     </div>
-                    <span class="muted">Live Collection Engine</span>
-                </div>
-                <div class="console-body">
-                    <div class="console-line">
-                        <span class="prompt">$</span>
-                        <span class="typed" data-type-text='query:"pawan kalyan" event:"iphone" since:"2026-02-01" until:"2026-02-03"'></span>
+                    <div class="chart-legend">
+                        {% for row in sentiment_rows %}
+                            <span class="chart-legend-pill {{ row.css }}">{{ row.label }} {{ row.pct }}%</span>
+                        {% endfor %}
                     </div>
-                    <div class="console-line"><span class="ok">status:</span> ready to scrape</div>
-                    <div class="console-line"><span class="ok">outputs:</span> sentiment, top users, csv export</div>
-                </div>
+                </article>
+
+                <article class="chart-card chart-card-wide" data-reveal data-reveal-delay="260">
+                    <h3>Event Activity</h3>
+                    <div class="mini-bars" data-bar-group data-reveal data-reveal-delay="300">
+                        {% for row in event_run_rows %}
+                            <div class="bar-row">
+                                <span>{{ row.label }}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill landing-bar-fill" data-width="{{ row.pct }}"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No event activity yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="chart-card chart-card-wide" data-reveal data-reveal-delay="300">
+                    <h3>Run Freshness</h3>
+                    <div class="mini-bars" data-bar-group data-reveal data-reveal-delay="340">
+                        {% for row in freshness_rows %}
+                            <div class="bar-row">
+                                <span>{{ row.label }}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill neu landing-bar-fill" data-width="{{ row.pct }}"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No recent run updates yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
             </div>
 
             <div class="landing-preview-note">
@@ -140,41 +168,17 @@
 </section>
 
 <section class="landing-section">
-    <div class="panel" data-reveal data-reveal-delay="60">
-        <h2>Recent Example Runs</h2>
-        <p class="muted" style="margin-top: 6px;">
-            New users see this style of sample data first, then collect their own event runs.
+    <div class="panel" data-reveal data-reveal-delay="80">
+        <h2>Ready To Turn Data Into Action?</h2>
+        <p class="muted" style="margin-top: 8px;">
+            Start from these motion-driven themes, then run live X queries in your private workspace.
         </p>
-        <div class="table-wrap" style="max-height: 360px; margin-top: 12px;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Event</th>
-                        <th>Run File</th>
-                        <th>Tweets</th>
-                        <th>Updated</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for run in recent_runs %}
-                        <tr>
-                            <td>{{ run.event }}</td>
-                            <td>{{ run.file_name }}</td>
-                            <td>{{ run.tweet_count|default:"-" }}</td>
-                            <td>{{ run.updated_at }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="4" class="muted">No example runs are available yet.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
         <div class="landing-cta" style="margin-top: 14px;">
             {% if user.is_authenticated %}
-                <a class="btn btn-primary" href="{% url 'dashboard' %}">Go To Dashboard</a>
+                <a class="btn btn-primary" href="{% url 'dashboard' %}">Open Dashboard</a>
             {% else %}
-                <a class="btn btn-primary" href="{% url 'login' %}">Login And Start</a>
-                <a class="btn btn-ghost" href="{% url 'register' %}">Sign Up</a>
+                <a class="btn btn-primary" href="{% url 'login' %}">Login To Continue</a>
+                <a class="btn btn-ghost" href="{% url 'register' %}">Create Account</a>
             {% endif %}
         </div>
     </div>

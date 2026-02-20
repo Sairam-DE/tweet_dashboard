@@ -684,6 +684,37 @@ def logout_view(request):
     return redirect("login")
 
 
+def _home_event_run_rows(snapshot, limit=6):
+    rows = []
+    for card in snapshot.get("event_cards", []):
+        rows.append(
+            {
+                "label": str(card.get("name") or "event"),
+                "value": int(card.get("run_count") or 0),
+            }
+        )
+
+    rows = sorted(rows, key=lambda row: row["value"], reverse=True)[:limit]
+    max_value = max((row["value"] for row in rows), default=0)
+    for row in rows:
+        row["pct"] = max(10, int((row["value"] / max_value) * 100)) if max_value else 0
+    return rows
+
+
+def _home_freshness_rows(snapshot, limit=7):
+    daily_counts = Counter()
+    for run in snapshot.get("recent_runs", []):
+        day_label = str(run.get("updated_at") or "")[:10]
+        if day_label:
+            daily_counts[day_label] += 1
+
+    rows = [{"label": label, "value": count} for label, count in sorted(daily_counts.items())][-limit:]
+    max_value = max((row["value"] for row in rows), default=0)
+    for row in rows:
+        row["pct"] = max(10, int((row["value"] / max_value) * 100)) if max_value else 0
+    return rows
+
+
 def home(request):
     snapshot = _dataset_snapshot("all", data_dir=EXAMPLE_DATA_DIR)
     capability_cards = [
@@ -716,12 +747,26 @@ def home(request):
         "Interactive sentiment dashboard with hover insights and click-through tweet filtering.",
         "Persistent deployment model for production hosting on Render.",
     ]
+
+    total_runs = int(snapshot.get("total_runs") or 0)
+    non_empty_runs = int(snapshot.get("non_empty_runs") or 0)
+    run_quality_pct = round((non_empty_runs / total_runs) * 100, 1) if total_runs else 0.0
+
+    if snapshot.get("sentiment_total"):
+        home_sentiment_pie = snapshot.get("sentiment_pie") or {"pos": 0.0, "pos_neu": 0.0, "neu": 0.0, "neg": 0.0}
+    else:
+        home_sentiment_pie = {"pos": 0.0, "pos_neu": 100.0, "neu": 100.0, "neg": 0.0}
+
     context = {
         **snapshot,
         "example_data_dir": str(EXAMPLE_DATA_DIR),
         "capability_cards": capability_cards,
         "outcomes": outcomes,
         "built_stack": built_stack,
+        "run_quality_pct": run_quality_pct,
+        "home_sentiment_pie": home_sentiment_pie,
+        "event_run_rows": _home_event_run_rows(snapshot),
+        "freshness_rows": _home_freshness_rows(snapshot),
     }
     return render(request, "viewer/home.html", context)
 

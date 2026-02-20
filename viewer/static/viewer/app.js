@@ -181,6 +181,60 @@
     });
   }
 
+  function initLandingCharts() {
+    var root = document.querySelector("[data-landing-root]");
+    if (!root) return;
+
+    var prefersReducedMotion = false;
+    try {
+      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      prefersReducedMotion = false;
+    }
+
+    root.querySelectorAll("[data-pie-progress]").forEach(function (ring) {
+      if (ring.dataset.pieAnimated === "1") return;
+      ring.dataset.pieAnimated = "1";
+
+      var target = Math.max(0, Math.min(parseNumber(ring.getAttribute("data-target"), 0), 100));
+      if (prefersReducedMotion) {
+        ring.style.setProperty("--p", target.toFixed(2));
+        return;
+      }
+
+      var start = null;
+      var duration = 900;
+
+      function animate(ts) {
+        if (start === null) start = ts;
+        var progress = Math.min((ts - start) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var value = target * eased;
+        ring.style.setProperty("--p", value.toFixed(2));
+        if (progress < 1) {
+          window.requestAnimationFrame(animate);
+        }
+      }
+
+      ring.style.setProperty("--p", "0");
+      window.requestAnimationFrame(animate);
+    });
+
+    root.querySelectorAll("[data-pie-spin]").forEach(function (pie, index) {
+      if (pie.dataset.pieSpinAnimated === "1") return;
+      pie.dataset.pieSpinAnimated = "1";
+
+      if (prefersReducedMotion) {
+        pie.classList.add("is-ready");
+        return;
+      }
+
+      window.setTimeout(function () {
+        pie.classList.add("is-ready");
+      }, 220 + index * 120);
+    });
+  }
+
   function initTiltCards() {
     var cards = document.querySelectorAll("[data-tilt-card]");
     if (!cards.length) return;
@@ -359,6 +413,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initLandingMotion();
+    initLandingCharts();
     initLandingType();
     initTiltCards();
     document.querySelectorAll(".sentiment-widget").forEach(initSentimentWidget);

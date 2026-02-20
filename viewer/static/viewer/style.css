@@ -775,10 +775,186 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
     align-self: start;
 }
 
-.landing-sentiment {
+.landing-chart-grid {
     margin-top: 12px;
     display: grid;
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.chart-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 12px;
+}
+
+.chart-card h3 {
+    font-size: 15px;
+}
+
+.chart-card-wide {
+    grid-column: 1 / -1;
+}
+
+.chart-ring-shell {
+    width: 150px;
+    height: 150px;
+    margin: 10px auto 0;
+    position: relative;
+}
+
+.chart-ring {
+    --p: 0;
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: conic-gradient(
+        #ff2f59 0 calc(var(--p) * 1%),
+        rgba(255, 255, 255, 0.14) calc(var(--p) * 1%) 100%
+    );
+    box-shadow: inset 0 0 26px rgba(255, 47, 89, 0.2);
+}
+
+.chart-ring::after {
+    content: "";
+    position: absolute;
+    inset: 20%;
+    border-radius: 50%;
+    background: rgba(11, 11, 13, 0.96);
+    border: 1px solid var(--line);
+}
+
+.chart-ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.chart-ring-value {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff3f6;
+}
+
+.chart-ring-unit {
+    font-size: 14px;
+    color: #ff7e98;
+}
+
+.chart-ring-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+}
+
+.chart-note {
+    margin: 8px 0 0;
+    text-align: center;
+    font-size: 12px;
+}
+
+.chart-pie {
+    --pos: 0%;
+    --pos-neu: 100%;
+    width: 150px;
+    height: 150px;
+    margin: 10px auto 0;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: conic-gradient(
+        #ff6a89 0 var(--pos),
+        #b57a87 var(--pos) var(--pos-neu),
+        #be0b31 var(--pos-neu) 100%
+    );
+    position: relative;
+    transform: scale(0.9) rotate(-30deg);
+    opacity: 0.24;
+    transition: transform 0.85s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.85s ease;
+}
+
+.chart-pie.is-ready {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+}
+
+.chart-pie::after {
+    content: "";
+    position: absolute;
+    inset: 21%;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: rgba(11, 11, 13, 0.96);
+}
+
+.chart-pie-center {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.chart-pie-center span {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.chart-pie-center small {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.chart-legend {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chart-legend-pill {
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.chart-legend-pill.pos {
+    border-color: rgba(255, 106, 137, 0.5);
+    background: rgba(255, 106, 137, 0.16);
+}
+
+.chart-legend-pill.neu {
+    border-color: rgba(181, 122, 135, 0.5);
+    background: rgba(181, 122, 135, 0.16);
+}
+
+.chart-legend-pill.neg {
+    border-color: rgba(190, 11, 49, 0.55);
+    background: rgba(190, 11, 49, 0.2);
+}
+
+.mini-bars {
+    margin-top: 8px;
+    display: grid;
+    gap: 8px;
+}
+
+.mini-bars .bar-row {
+    grid-template-columns: 120px 1fr 38px;
 }
 
 .landing-bar-fill {
@@ -1040,6 +1216,10 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .landing-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
     .landing-card-grid,
     .landing-two-col {
         grid-template-columns: 1fr;
@@ -1050,5 +1230,9 @@ body.landing-motion-ready [data-landing-root] [data-reveal].is-visible {
     .run-grid,
     .sentiment-split {
         grid-template-columns: 1fr;
+    }
+
+    .mini-bars .bar-row {
+        grid-template-columns: 92px 1fr 34px;
     }
 }
