@@ -14,3 +14,4 @@ media/
 
 # Keep scraped tweets, but skip per-run request logs
 data/**/jsons/*.log
+data/__userspaces__/

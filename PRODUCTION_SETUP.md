@@ -17,10 +17,16 @@ Set these in Render service `Environment`:
 - `DJANGO_SECURE_HSTS_PRELOAD=true`
 - `TWEET_DATA_DIR=/var/data/tweets`
 - `SQLITE_DB_PATH=/var/data/pulseboard/db.sqlite3`
+- `TWEET_EXAMPLE_DATA_DIR=/opt/render/project/src/data` (optional, default already points here)
 
 Optional if you want in-app collection from hosted site:
 
 - `X_BEARER_TOKEN=<your-x-api-bearer-token>`
+
+New user behavior:
+
+- Every authenticated user gets a separate workspace under `TWEET_USER_SPACES_DIR` (default: `<TWEET_DATA_DIR>/__userspaces__`).
+- On first login, workspace is auto-seeded from `TWEET_EXAMPLE_DATA_DIR` so old data appears as examples.
 
 ## 2) Create Django admin user on Render
 

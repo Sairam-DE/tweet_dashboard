@@ -31,5 +31,9 @@ services:
         value: "true"
       - key: TWEET_DATA_DIR
         value: "/var/data/tweets"
+      - key: TWEET_USER_SPACES_DIR
+        value: "/var/data/tweets/__userspaces__"
+      - key: TWEET_EXAMPLE_DATA_DIR
+        value: "/opt/render/project/src/data"
       - key: SQLITE_DB_PATH
         value: "/var/data/pulseboard/db.sqlite3"

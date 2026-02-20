@@ -8,7 +8,8 @@
         <h1 class="hero-title">Tweet Intelligence Dashboard</h1>
         <p class="muted">
             Explore scraped data, submit new collection queries, and review run quality from one interface.
-            Data root: <code>{{ data_dir }}</code>
+            Your workspace: <code>{{ workspace_dir|default:data_dir }}</code>
+            | Example seed data: <code>{{ shared_example_dir|default:data_dir }}</code>
         </p>
 
         <form method="get" style="margin-top: 14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">

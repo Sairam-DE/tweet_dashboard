@@ -3,6 +3,7 @@ import json
 import os
 import time
 import csv
+import shutil
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -40,11 +41,62 @@ def _resolve_data_dir():
 
 
 DATA_DIR = _resolve_data_dir()
+EXAMPLE_DATA_DIR = Path(os.getenv("TWEET_EXAMPLE_DATA_DIR", str(PROJECT_DIR / "data"))).expanduser()
+USER_SPACES_DIR = Path(os.getenv("TWEET_USER_SPACES_DIR", str(DATA_DIR / "__userspaces__"))).expanduser()
+WORKSPACE_SEEDED_MARKER = ".workspace_seeded"
 EXPORT_MAX_ROWS = 50000
 
 _VADER = SentimentIntensityAnalyzer()
 _RUN_SUMMARY_CACHE = {}
 _RUN_SUMMARY_CACHE_MAX = 600
+
+
+def _iter_event_dirs(data_dir):
+    if not data_dir.exists() or not data_dir.is_dir():
+        return []
+    return sorted(
+        (path for path in data_dir.iterdir() if path.is_dir() and not path.name.startswith("__")),
+        key=lambda path: path.name.lower(),
+    )
+
+
+def _workspace_name(username):
+    raw = (str(username or "")).strip().lower()
+    safe = "".join(char if (char.isalnum() or char in {"_", "-"}) else "_" for char in raw)
+    safe = safe.strip("_-")
+    return safe or "user"
+
+
+def _seed_workspace(workspace_dir):
+    marker_path = workspace_dir / WORKSPACE_SEEDED_MARKER
+    if marker_path.exists():
+        return
+
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    has_user_data = any(path.is_dir() and not path.name.startswith("__") for path in workspace_dir.iterdir())
+    if not has_user_data and EXAMPLE_DATA_DIR.exists() and EXAMPLE_DATA_DIR.is_dir():
+        for src_event_dir in _iter_event_dirs(EXAMPLE_DATA_DIR):
+            dst_event_dir = workspace_dir / src_event_dir.name
+            if dst_event_dir.exists():
+                continue
+            try:
+                shutil.copytree(src_event_dir, dst_event_dir)
+            except OSError:
+                continue
+
+    try:
+        marker_path.write_text(datetime.utcnow().isoformat() + "Z", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _workspace_data_dir(user):
+    if not getattr(user, "is_authenticated", False):
+        return DATA_DIR
+
+    workspace_dir = USER_SPACES_DIR / _workspace_name(getattr(user, "username", "user"))
+    _seed_workspace(workspace_dir)
+    return workspace_dir
 
 
 def _sentiment_compound(text):
@@ -174,14 +226,14 @@ def _analyze_run_file(json_path):
     return _cache_run_summary(cache_key, summary)
 
 
-def _collect_preview_tweets(event_names, selected_event, sentiment_filter, text_query, user_query, limit, offset):
+def _collect_preview_tweets(event_names, selected_event, sentiment_filter, text_query, user_query, limit, offset, data_dir):
     if selected_event != "all" and selected_event not in event_names:
         return []
 
     scope_events = event_names if selected_event == "all" else [selected_event]
     candidate_runs = []
     for event_name in scope_events:
-        candidate_runs.extend(_run_entries(DATA_DIR / event_name))
+        candidate_runs.extend(_run_entries(data_dir / event_name))
     candidate_runs = sorted(candidate_runs, key=lambda run: run["updated_ts"], reverse=True)
 
     normalized_text_query = (text_query or "").strip().lower()
@@ -269,8 +321,8 @@ def _build_run_filter_state(request):
     }
 
 
-def _event_dir(event):
-    event_dir = DATA_DIR / event
+def _event_dir(event, data_dir):
+    event_dir = data_dir / event
     if not event_dir.exists() or not event_dir.is_dir():
         raise Http404(f"Unknown event: {event}")
     return event_dir
@@ -333,9 +385,9 @@ def _iter_tweets(json_path):
                 continue
 
 
-def _dataset_snapshot(event_filter="all"):
+def _dataset_snapshot(event_filter="all", data_dir=DATA_DIR):
     selected_event = event_filter or "all"
-    event_names = sorted(p.name for p in DATA_DIR.iterdir() if p.is_dir()) if DATA_DIR.exists() else []
+    event_names = [path.name for path in _iter_event_dirs(data_dir)]
     event_cards = []
 
     total_runs = 0
@@ -355,7 +407,7 @@ def _dataset_snapshot(event_filter="all"):
         if selected_event != "all" and event_name != selected_event:
             continue
 
-        event_dir = DATA_DIR / event_name
+        event_dir = data_dir / event_name
         runs = _run_entries(event_dir)
         total_runs += len(runs)
         non_empty_runs += sum(1 for run in runs if not run["is_empty"])
@@ -447,7 +499,7 @@ def _dataset_snapshot(event_filter="all"):
         "sentiment_total": sentiment_total,
         "sentiment_pie": sentiment_pie,
         "sentiment_rows": sentiment_rows,
-        "data_dir": str(DATA_DIR),
+        "data_dir": str(data_dir),
     }
 
 
@@ -489,23 +541,30 @@ def _load_collector_class():
     )
 
 
-def _run_collection(query, since, until, event, token):
-    (DATA_DIR / event / "jsons").mkdir(parents=True, exist_ok=True)
-    (DATA_DIR / event / "csv").mkdir(parents=True, exist_ok=True)
+def _run_collection(query, since, until, event, token, data_dir):
+    (data_dir / event / "jsons").mkdir(parents=True, exist_ok=True)
+    (data_dir / event / "csv").mkdir(parents=True, exist_ok=True)
 
-    collector_cls = _load_collector_class()
     run_token = str(time.time()).replace(".", "-")
-    collector = collector_cls(query, since, until, run_token, event)
-
     had_token = "X_BEARER_TOKEN" in os.environ
     previous_token = os.environ.get("X_BEARER_TOKEN")
+    had_data_dir = "TWEET_DATA_DIR" in os.environ
+    previous_data_dir = os.environ.get("TWEET_DATA_DIR")
+    os.environ["TWEET_DATA_DIR"] = str(data_dir)
     if token:
         os.environ["X_BEARER_TOKEN"] = token
 
     try:
+        collector_cls = _load_collector_class()
+        collector = collector_cls(query, since, until, run_token, event)
         collector.collect_tweets()
         return f"{since}_{until}_{run_token}.json"
     finally:
+        if had_data_dir:
+            os.environ["TWEET_DATA_DIR"] = previous_data_dir or ""
+        else:
+            os.environ.pop("TWEET_DATA_DIR", None)
+
         if token:
             if had_token:
                 os.environ["X_BEARER_TOKEN"] = previous_token or ""
@@ -513,9 +572,9 @@ def _run_collection(query, since, until, event, token):
                 os.environ.pop("X_BEARER_TOKEN", None)
 
 
-def _dashboard_response(request, query_form):
+def _dashboard_response(request, query_form, data_dir):
     selected_event = request.GET.get("event", "all")
-    snapshot = _dataset_snapshot(selected_event)
+    snapshot = _dataset_snapshot(selected_event, data_dir=data_dir)
 
     browser_sentiment = _normalize_sentiment(request.GET.get("sentiment"))
     browser_q = (request.GET.get("q") or "").strip()
@@ -533,6 +592,7 @@ def _dashboard_response(request, query_form):
             browser_user,
             EXPORT_MAX_ROWS,
             0,
+            data_dir,
         )
         export_header = [
             "event",
@@ -575,10 +635,13 @@ def _dashboard_response(request, query_form):
         browser_user,
         browser_limit,
         browser_offset,
+        data_dir,
     )
 
     context = {
         **snapshot,
+        "workspace_dir": str(data_dir),
+        "shared_example_dir": str(EXAMPLE_DATA_DIR),
         "query_form": query_form,
         "browser_sentiment": browser_sentiment,
         "browser_q": browser_q,
@@ -601,6 +664,7 @@ def register_view(request):
         form = RegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
+            _workspace_data_dir(user)
             login(request, user)
             messages.success(request, "Account created. Welcome to the dashboard.")
             next_url = request.GET.get("next")
@@ -623,7 +687,8 @@ def logout_view(request):
 def dashboard(request):
     initial_event = request.GET.get("event")
     form = CollectQueryForm(initial={"event": initial_event} if initial_event and initial_event != "all" else None)
-    return _dashboard_response(request, form)
+    user_data_dir = _workspace_data_dir(request.user)
+    return _dashboard_response(request, form, user_data_dir)
 
 
 @login_required
@@ -631,12 +696,15 @@ def collect_query(request):
     if request.method != "POST":
         return redirect("dashboard")
 
+    user_data_dir = _workspace_data_dir(request.user)
     form = CollectQueryForm(request.POST)
     if not form.is_valid():
         selected_event = request.POST.get("event_filter", "all")
-        snapshot = _dataset_snapshot(selected_event)
+        snapshot = _dataset_snapshot(selected_event, data_dir=user_data_dir)
         context = {
             **snapshot,
+            "workspace_dir": str(user_data_dir),
+            "shared_example_dir": str(EXAMPLE_DATA_DIR),
             "query_form": form,
         }
         return render(request, "viewer/dashboard.html", context, status=400)
@@ -648,7 +716,7 @@ def collect_query(request):
     token = (form.cleaned_data.get("bearer_token") or "").strip()
 
     try:
-        run_filename = _run_collection(query, since, until, event, token)
+        run_filename = _run_collection(query, since, until, event, token, user_data_dir)
     except Exception as exc:
         messages.error(request, f"Collection failed: {exc}")
         return redirect(f"/?event={event}")
@@ -659,7 +727,8 @@ def collect_query(request):
 
 @login_required
 def run_detail(request, event, filename):
-    event_dir = _event_dir(event)
+    user_data_dir = _workspace_data_dir(request.user)
+    event_dir = _event_dir(event, user_data_dir)
     json_path = event_dir / "jsons" / filename
 
     if json_path.suffix.lower() != ".json" or not json_path.exists() or not json_path.is_file():
