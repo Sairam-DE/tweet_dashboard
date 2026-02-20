@@ -58,12 +58,25 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <p class="muted" style="margin-top: 12px;">No sentiment sample available yet.</p>
+                <div class="landing-empty">
+                    <p class="landing-empty-title">No sample sentiment is loaded yet.</p>
+                    <p class="muted" style="margin-top: 6px;">
+                        As soon as an example run is available, this card will show sentiment split and trend indicators.
+                    </p>
+                    <ul class="landing-list landing-list-compact">
+                        <li>Login and open your private workspace.</li>
+                        <li>Run a query with topic + date range.</li>
+                        <li>Get sentiment, top users, and exportable insights instantly.</li>
+                    </ul>
+                </div>
             {% endif %}
 
             <div class="landing-preview-note">
-                <span class="pill">Example root</span>
-                <code>{{ example_data_dir }}</code>
+                <span class="pill">Example runs: {{ total_runs }}</span>
+                <span class="pill">Tweets in preview: {{ total_tweets }}</span>
+                {% if not user.is_authenticated %}
+                    <span class="pill">Private workspace after login</span>
+                {% endif %}
             </div>
         </div>
     </div>

@@ -626,7 +626,7 @@ th {
     display: grid;
     grid-template-columns: 1.25fr 0.75fr;
     gap: 16px;
-    align-items: stretch;
+    align-items: start;
 }
 
 .landing-copy,
@@ -674,6 +674,7 @@ th {
     background:
         linear-gradient(160deg, rgba(20, 20, 24, 0.95), rgba(8, 8, 10, 0.96)),
         radial-gradient(circle at 70% 10%, rgba(255, 47, 89, 0.14), transparent 35%);
+    align-self: start;
 }
 
 .landing-sentiment {
@@ -688,6 +689,21 @@ th {
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+}
+
+.landing-empty {
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.landing-empty-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffe8ee;
 }
 
 .landing-section {
@@ -731,6 +747,12 @@ th {
     padding-left: 18px;
     display: grid;
     gap: 8px;
+}
+
+.landing-list-compact {
+    margin-top: 10px;
+    font-size: 13px;
+    gap: 6px;
 }
 
 @keyframes rise-in {
