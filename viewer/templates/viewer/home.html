@@ -14,12 +14,19 @@
                 PulseBoard helps you collect, analyze, and explain tweet data from one interface.
                 Teams use it to track sentiment, monitor narrative shifts, and export evidence-backed reports faster.
             </p>
+            <div class="landing-flowline" data-reveal data-reveal-delay="120">
+                <span class="flow-pill">Scrape</span>
+                <span class="flow-dot"></span>
+                <span class="flow-pill">Classify Sentiment</span>
+                <span class="flow-dot"></span>
+                <span class="flow-pill">Export Insight</span>
+            </div>
             <div class="landing-cta">
                 {% if user.is_authenticated %}
-                    <a class="btn btn-primary" href="{% url 'dashboard' %}">Open Dashboard</a>
+                    <a class="btn btn-primary" href="{% url 'dashboard' %}">Launch Intelligence Desk</a>
                     <a class="btn btn-ghost" href="{% url 'logout' %}">Switch Account</a>
                 {% else %}
-                    <a class="btn btn-primary" href="{% url 'login' %}">Login To Start Scraping</a>
+                    <a class="btn btn-primary" href="{% url 'login' %}">Login And Start Collection</a>
                     <a class="btn btn-secondary" href="{% url 'register' %}">Create Account</a>
                 {% endif %}
             </div>
@@ -73,6 +80,23 @@
                 </div>
             {% endif %}
 
+            <div class="landing-console" data-reveal data-reveal-delay="180">
+                <div class="console-head">
+                    <div class="console-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="muted">Live Collection Engine</span>
+                </div>
+                <div class="console-body">
+                    <div class="console-line">
+                        <span class="prompt">$</span>
+                        <span class="typed" data-type-text='query:"pawan kalyan" event:"iphone" since:"2026-02-01" until:"2026-02-03"'></span>
+                    </div>
+                    <div class="console-line"><span class="ok">status:</span> ready to scrape</div>
+                    <div class="console-line"><span class="ok">outputs:</span> sentiment, top users, csv export</div>
+                </div>
+            </div>
+
             <div class="landing-preview-note">
                 <span class="pill">Example runs: {{ total_runs }}</span>
                 <span class="pill">Tweets in preview: {{ total_tweets }}</span>
@@ -88,7 +112,7 @@
     <h2>What This Tool Does</h2>
     <div class="landing-card-grid">
         {% for card in capability_cards %}
-            <article class="panel landing-card" data-reveal style="--card-index: {{ forloop.counter0 }};">
+            <article class="panel landing-card" data-reveal data-tilt-card style="--card-index: {{ forloop.counter0 }};">
                 <h3>{{ card.title }}</h3>
                 <p class="muted">{{ card.body }}</p>
             </article>

@@ -144,6 +144,79 @@
     });
   }
 
+  function initLandingType() {
+    var typedNodes = document.querySelectorAll(".typed[data-type-text]");
+    if (!typedNodes.length) return;
+
+    var prefersReducedMotion = false;
+    try {
+      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      prefersReducedMotion = false;
+    }
+
+    typedNodes.forEach(function (node) {
+      if (node.dataset.typedInit === "1") return;
+      node.dataset.typedInit = "1";
+
+      var targetText = node.getAttribute("data-type-text") || "";
+      if (prefersReducedMotion) {
+        node.textContent = targetText;
+        return;
+      }
+
+      node.textContent = "";
+      var index = 0;
+      var speed = 22;
+
+      function typeNext() {
+        node.textContent = targetText.slice(0, index);
+        index += 1;
+        if (index <= targetText.length) {
+          window.setTimeout(typeNext, speed);
+        }
+      }
+
+      window.setTimeout(typeNext, 220);
+    });
+  }
+
+  function initTiltCards() {
+    var cards = document.querySelectorAll("[data-tilt-card]");
+    if (!cards.length) return;
+
+    var prefersReducedMotion = false;
+    try {
+      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      prefersReducedMotion = false;
+    }
+    if (prefersReducedMotion) return;
+
+    cards.forEach(function (card) {
+      var rect = null;
+
+      function onMove(event) {
+        rect = rect || card.getBoundingClientRect();
+        var x = (event.clientX - rect.left) / rect.width;
+        var y = (event.clientY - rect.top) / rect.height;
+        var rotateY = (x - 0.5) * 6;
+        var rotateX = (0.5 - y) * 6;
+        card.style.transform = "perspective(900px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-3px)";
+      }
+
+      function reset() {
+        rect = null;
+        card.style.transform = "";
+      }
+
+      card.addEventListener("pointermove", onMove);
+      card.addEventListener("pointerleave", reset);
+      card.addEventListener("pointercancel", reset);
+      card.addEventListener("blur", reset, true);
+    });
+  }
+
   function initSentimentWidget(widget) {
     if (!widget) return;
 
@@ -286,6 +359,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initLandingMotion();
+    initLandingType();
+    initTiltCards();
     document.querySelectorAll(".sentiment-widget").forEach(initSentimentWidget);
   });
 })();
