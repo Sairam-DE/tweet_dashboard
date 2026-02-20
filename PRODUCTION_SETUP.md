@@ -15,6 +15,8 @@ Set these in Render service `Environment`:
 - `DJANGO_SECURE_HSTS_SECONDS=31536000`
 - `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=true`
 - `DJANGO_SECURE_HSTS_PRELOAD=true`
+- `TWEET_DATA_DIR=/var/data/tweets`
+- `SQLITE_DB_PATH=/var/data/pulseboard/db.sqlite3`
 
 Optional if you want in-app collection from hosted site:
 
@@ -40,3 +42,20 @@ From project root:
 cd d:\files\tweet_dashboard
 ..\.venv\Scripts\python.exe manage.py createsuperuser
 ```
+
+## 4) Make data persistent on Render
+
+Your current screenshot shows `Free` plan. Render persistent disks are not available on free web services.  
+To persist tweets and SQLite DB across restarts/redeploys:
+
+1. Upgrade service plan to one that supports disks.
+2. In Render service, go to `Disk` -> `Add Disk`.
+3. Use:
+   - Mount path: `/var/data`
+   - Size: 1 GB (or higher)
+4. Confirm env vars are set:
+   - `TWEET_DATA_DIR=/var/data/tweets`
+   - `SQLITE_DB_PATH=/var/data/pulseboard/db.sqlite3`
+5. Deploy latest commit.
+
+After deploy, dashboard `Data root` should show `/var/data/tweets`.

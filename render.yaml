@@ -3,8 +3,8 @@ services:
     name: pulseboard
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
-    startCommand: gunicorn dashboard_site.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && gunicorn dashboard_site.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120
     autoDeploy: true
     envVars:
       - key: DJANGO_ENV
@@ -29,3 +29,7 @@ services:
         value: "true"
       - key: DJANGO_SECURE_HSTS_PRELOAD
         value: "true"
+      - key: TWEET_DATA_DIR
+        value: "/var/data/tweets"
+      - key: SQLITE_DB_PATH
+        value: "/var/data/pulseboard/db.sqlite3"

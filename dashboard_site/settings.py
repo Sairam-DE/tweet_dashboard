@@ -102,10 +102,18 @@ WSGI_APPLICATION = 'dashboard_site.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+SQLITE_DB_PATH = Path(os.getenv("SQLITE_DB_PATH", str(BASE_DIR / "db.sqlite3"))).expanduser()
+if not SQLITE_DB_PATH.parent.exists():
+    try:
+        SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Directory creation may fail on read-only filesystems; DB open will report a clearer error later.
+        pass
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': SQLITE_DB_PATH,
     }
 }
 
