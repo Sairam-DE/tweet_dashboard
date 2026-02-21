@@ -3,10 +3,12 @@ import json
 import os
 import time
 import csv
+import re
 import shutil
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -50,6 +52,35 @@ EXPORT_MAX_ROWS = 50000
 _VADER = SentimentIntensityAnalyzer()
 _RUN_SUMMARY_CACHE = {}
 _RUN_SUMMARY_CACHE_MAX = 600
+_RATE_LIMIT_RESET_RE = re.compile(r"Retry after reset:\s*([0-9]{9,})")
+
+
+def _env_int(name, default):
+    try:
+        return int(os.getenv(name, str(default)).strip())
+    except (TypeError, ValueError, AttributeError):
+        return int(default)
+
+
+def _env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)).strip())
+    except (TypeError, ValueError, AttributeError):
+        return float(default)
+
+
+RATE_LIMIT_MAX_RETRIES = max(0, _env_int("X_RATE_LIMIT_MAX_RETRIES", 4))
+RATE_LIMIT_MAX_WAIT_SECONDS = max(0, _env_int("X_RATE_LIMIT_MAX_WAIT_SECONDS", 300))
+RATE_LIMIT_BASE_BACKOFF_SECONDS = max(1.0, _env_float("X_RATE_LIMIT_BACKOFF_SECONDS", 2.0))
+
+
+class RateLimitDeferredError(RuntimeError):
+    def __init__(self, message, reset_ts=None, retry_after=None, attempts=0, waited_seconds=0):
+        super().__init__(message)
+        self.reset_ts = reset_ts
+        self.retry_after = retry_after
+        self.attempts = attempts
+        self.waited_seconds = waited_seconds
 
 
 def _iter_event_dirs(data_dir):
@@ -542,6 +573,28 @@ def _load_collector_class():
     )
 
 
+def _extract_rate_limit_reset_ts(error):
+    message = str(error or "")
+    match = _RATE_LIMIT_RESET_RE.search(message)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_rate_limit_error(error):
+    return "rate limit" in str(error or "").lower()
+
+
+def _rate_limit_reset_iso(reset_ts):
+    try:
+        return datetime.fromtimestamp(int(reset_ts), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError, OverflowError):
+        return ""
+
+
 def _run_collection(query, since, until, event, token, data_dir):
     (data_dir / event / "jsons").mkdir(parents=True, exist_ok=True)
     (data_dir / event / "csv").mkdir(parents=True, exist_ok=True)
@@ -573,9 +626,57 @@ def _run_collection(query, since, until, event, token, data_dir):
                 os.environ.pop("X_BEARER_TOKEN", None)
 
 
+def _run_collection_with_retry(query, since, until, event, token, data_dir):
+    attempts = 0
+    waited_total = 0
+    max_attempts = max(1, RATE_LIMIT_MAX_RETRIES + 1)
+
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            run_filename = _run_collection(query, since, until, event, token, data_dir)
+            return run_filename, {"attempts": attempts, "waited_seconds": waited_total}
+        except Exception as exc:
+            if not _is_rate_limit_error(exc):
+                raise
+
+            reset_ts = _extract_rate_limit_reset_ts(exc)
+            now_ts = int(time.time())
+            retry_after = 0
+
+            if reset_ts and reset_ts > now_ts:
+                retry_after = max(1, reset_ts - now_ts + 1)
+            else:
+                retry_after = int(round(RATE_LIMIT_BASE_BACKOFF_SECONDS * (2 ** (attempts - 1))))
+                retry_after = max(1, retry_after)
+
+            if attempts >= max_attempts:
+                raise RateLimitDeferredError(
+                    f"X API rate limit persisted after {attempts} attempts.",
+                    reset_ts=reset_ts,
+                    retry_after=retry_after,
+                    attempts=attempts,
+                    waited_seconds=waited_total,
+                ) from exc
+
+            if waited_total + retry_after > RATE_LIMIT_MAX_WAIT_SECONDS:
+                raise RateLimitDeferredError(
+                    "X API rate limit window is longer than auto-retry max wait.",
+                    reset_ts=reset_ts,
+                    retry_after=retry_after,
+                    attempts=attempts,
+                    waited_seconds=waited_total,
+                ) from exc
+
+            time.sleep(retry_after)
+            waited_total += retry_after
+
+
 def _dashboard_response(request, query_form, data_dir):
     selected_event = request.GET.get("event", "all")
     snapshot = _dataset_snapshot(selected_event, data_dir=data_dir)
+    rate_limit_reset_ts = _parse_bounded_int(request.GET.get("rate_limit_reset"), 0, 0, 4102444800)
+    rate_limit_reset_iso = _rate_limit_reset_iso(rate_limit_reset_ts) if rate_limit_reset_ts else ""
 
     browser_sentiment = _normalize_sentiment(request.GET.get("sentiment"))
     browser_q = (request.GET.get("q") or "").strip()
@@ -653,6 +754,8 @@ def _dashboard_response(request, query_form, data_dir):
         "browser_next_offset": browser_offset + browser_limit,
         "browser_has_next": len(browser_rows) >= browser_limit,
         "browser_rows": browser_rows,
+        "rate_limit_reset_ts": rate_limit_reset_ts,
+        "rate_limit_reset_iso": rate_limit_reset_iso,
     }
     return render(request, "viewer/dashboard.html", context)
 
@@ -713,6 +816,413 @@ def _home_freshness_rows(snapshot, limit=7):
     for row in rows:
         row["pct"] = max(10, int((row["value"] / max_value) * 100)) if max_value else 0
     return rows
+
+
+def _format_compact_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = 0.0
+
+    absolute = abs(number)
+    if absolute >= 1_000_000_000:
+        return f"{number / 1_000_000_000:.1f}B"
+    if absolute >= 1_000_000:
+        return f"{number / 1_000_000:.1f}M"
+    if absolute >= 1_000:
+        return f"{number / 1_000:.1f}K"
+    return f"{int(round(number)):,}"
+
+
+def _scale_rows_for_pct(rows, value_key="value", pct_key="pct", min_pct=8):
+    max_value = max((int(row.get(value_key) or 0) for row in rows), default=0)
+    for row in rows:
+        value = int(row.get(value_key) or 0)
+        row[pct_key] = max(min_pct, int((value / max_value) * 100)) if max_value else 0
+    return rows
+
+
+def _safe_ratio(numerator, denominator, digits=2):
+    try:
+        num = float(numerator)
+        den = float(denominator)
+    except (TypeError, ValueError):
+        return 0.0
+    if den <= 0:
+        return 0.0
+    return round(num / den, digits)
+
+
+def _delta_label(current, previous):
+    try:
+        curr = float(current)
+        prev = float(previous)
+    except (TypeError, ValueError):
+        return "0.0%"
+    if prev <= 0:
+        return "new" if curr > 0 else "0.0%"
+    delta = ((curr - prev) / prev) * 100
+    return f"{'+' if delta >= 0 else ''}{delta:.1f}%"
+
+
+def _parse_tweet_hour(date_value):
+    raw = str(date_value or "").strip()
+    if not raw:
+        return None
+
+    normalized = raw.replace("Z", "+00:00")
+    parsed = None
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                parsed = datetime.strptime(raw[:19], fmt)
+                break
+            except ValueError:
+                continue
+
+    if parsed is None:
+        return None
+    return parsed.hour
+
+
+def _build_twitter_analytics_context(data_dir):
+    snapshot = _dataset_snapshot("all", data_dir=data_dir)
+    preview_rows = _collect_preview_tweets(
+        snapshot.get("event_names", []),
+        snapshot.get("selected_event", "all"),
+        None,
+        "",
+        "",
+        1500,
+        0,
+        data_dir,
+    )
+
+    total_tweets = int(snapshot.get("total_tweets") or 0)
+    total_likes = int(snapshot.get("total_likes") or 0)
+    total_retweets = int(snapshot.get("total_retweets") or 0)
+    total_runs = int(snapshot.get("total_runs") or 0)
+    non_empty_runs = int(snapshot.get("non_empty_runs") or 0)
+    avg_likes = float(snapshot.get("avg_likes") or 0.0)
+    avg_retweets = float(snapshot.get("avg_retweets") or 0.0)
+    engagement_actions = total_likes + total_retweets
+    run_quality_pct = round((non_empty_runs / total_runs) * 100, 1) if total_runs else 0.0
+    unique_users = len({str(row.get("username") or "").strip().lower() for row in preview_rows if row.get("username")})
+
+    top_user_name = ""
+    if snapshot.get("top_users"):
+        top_user_name = str(snapshot["top_users"][0][0] or "").strip()
+    account_handle = f"@{top_user_name}" if top_user_name and top_user_name != "unknown" else "@workspace"
+
+    overview_cards = [
+        {
+            "label": "Tweets Collected",
+            "value_display": _format_compact_number(total_tweets),
+            "delta": f"{total_runs} runs",
+            "tone": "pos",
+        },
+        {
+            "label": "Total Likes",
+            "value_display": _format_compact_number(total_likes),
+            "delta": f"avg {avg_likes:.2f} / tweet",
+            "tone": "pos",
+        },
+        {
+            "label": "Total Retweets",
+            "value_display": _format_compact_number(total_retweets),
+            "delta": f"avg {avg_retweets:.2f} / tweet",
+            "tone": "neu",
+        },
+        {
+            "label": "Engagement Actions",
+            "value_display": _format_compact_number(engagement_actions),
+            "delta": f"{_safe_ratio(engagement_actions, total_tweets, 2):.2f} / tweet",
+            "tone": "neu",
+        },
+        {
+            "label": "Non-empty Runs",
+            "value_display": _format_compact_number(non_empty_runs),
+            "delta": f"{run_quality_pct:.1f}% run quality",
+            "tone": "pos",
+        },
+        {
+            "label": "Active Users",
+            "value_display": _format_compact_number(unique_users),
+            "delta": f"top {account_handle}",
+            "tone": "pos",
+        },
+    ]
+
+    trend_rows = [
+        {"label": str(item.get("label") or "")[5:] or "day", "value": int(item.get("value") or 0)}
+        for item in snapshot.get("trend_points", [])[-10:]
+    ]
+    _scale_rows_for_pct(trend_rows, "value", "pct", min_pct=14)
+
+    sentiment_rows = [dict(row) for row in snapshot.get("sentiment_rows", [])]
+    if not sentiment_rows:
+        sentiment_rows = [
+            {"label": "Positive", "count": 0, "pct": 0.0, "css": "pos"},
+            {"label": "Neutral", "count": 0, "pct": 0.0, "css": "neu"},
+            {"label": "Negative", "count": 0, "pct": 0.0, "css": "neg"},
+        ]
+    sentiment_pie = dict(snapshot.get("sentiment_pie", {"pos": 0.0, "pos_neu": 100.0, "neu": 100.0, "neg": 0.0}))
+    sentiment_total = sum(int(row.get("count") or 0) for row in sentiment_rows)
+    if sentiment_total == 0:
+        sentiment_pie = {"pos": 0.0, "pos_neu": 100.0, "neu": 100.0, "neg": 0.0}
+
+    hashtag_counts = Counter()
+    for row in preview_rows:
+        text = str(row.get("text") or "")
+        for tag in re.findall(r"#([A-Za-z0-9_]{2,48})", text):
+            hashtag_counts[f"#{tag.lower()}"] += 1
+
+    hashtag_rows = [{"tag": tag, "count": count} for tag, count in hashtag_counts.most_common(8)]
+
+    follower_trend = []
+    for index, row in enumerate(trend_rows[-6:]):
+        base = int(row.get("value") or 0)
+        prev_value = int(trend_rows[-6:][index - 1].get("value") or 0) if index > 0 else 0
+        gained = max(base - prev_value, 0)
+        lost = max(prev_value - base, 0)
+        follower_trend.append(
+            {
+                "label": str(row.get("label") or f"D{index + 1}"),
+                "gained": gained,
+                "lost": lost,
+            }
+        )
+
+    max_follow_gained = max((row["gained"] for row in follower_trend), default=0)
+    max_follow_lost = max((row["lost"] for row in follower_trend), default=0)
+    for row in follower_trend:
+        row["gained_pct"] = max(10, int((row["gained"] / max_follow_gained) * 100)) if max_follow_gained > 0 else 0
+        row["lost_pct"] = max(10, int((row["lost"] / max_follow_lost) * 100)) if max_follow_lost > 0 else 0
+
+    hour_counts = Counter()
+    for row in preview_rows:
+        hour = _parse_tweet_hour(row.get("date"))
+        if hour is not None:
+            hour_counts[hour] += 1
+
+    hour_rows = [
+        {"label": "Morning (6-11)", "value": sum(hour_counts[h] for h in range(6, 12))},
+        {"label": "Afternoon (12-17)", "value": sum(hour_counts[h] for h in range(12, 18))},
+        {"label": "Evening (18-23)", "value": sum(hour_counts[h] for h in range(18, 24))},
+        {"label": "Night (0-5)", "value": sum(hour_counts[h] for h in range(0, 6))},
+    ]
+    _scale_rows_for_pct(hour_rows, "value", "pct", min_pct=16)
+
+    language_rows = [
+        {"label": str(lang or "unknown"), "value": int(count or 0)}
+        for lang, count in snapshot.get("top_languages", [])
+    ]
+    _scale_rows_for_pct(language_rows, "value", "pct", min_pct=14)
+
+    user_rows = [
+        {
+            "label": f"@{username}" if str(username or "").strip() and str(username).strip().lower() != "unknown" else "unknown",
+            "value": int(count or 0),
+        }
+        for username, count in snapshot.get("top_users", [])
+    ]
+    _scale_rows_for_pct(user_rows, "value", "pct", min_pct=14)
+
+    lang_country_map = {
+        "en": "United States",
+        "es": "Spain",
+        "hi": "India",
+        "pt": "Brazil",
+        "fr": "France",
+        "de": "Germany",
+        "tr": "Turkey",
+        "ja": "Japan",
+    }
+    country_counts = Counter()
+    for row in language_rows:
+        lang = str(row.get("label") or "").lower()
+        country_counts[lang_country_map.get(lang, str(row.get("label") or "").upper())] += int(row.get("value") or 0)
+
+    country_rows = [{"label": label, "value": value} for label, value in country_counts.most_common(6)]
+    _scale_rows_for_pct(country_rows, "value", "pct", min_pct=14)
+
+    event_rows = []
+    for card in snapshot.get("event_cards", []):
+        tweet_value = int(card.get("tweet_count") or 0)
+        run_value = int(card.get("run_count") or 0)
+        event_rows.append(
+            {
+                "label": str(card.get("name") or "event"),
+                "value": tweet_value if tweet_value > 0 else run_value,
+            }
+        )
+    event_rows = sorted(event_rows, key=lambda row: row.get("value", 0), reverse=True)[:8]
+    _scale_rows_for_pct(event_rows, "value", "pct", min_pct=14)
+
+    keyword_counts = Counter()
+    stop_words = {
+        "the", "and", "for", "with", "that", "this", "from", "your", "have", "will", "just", "about",
+        "http", "https", "www", "com", "are", "was", "were", "you", "our", "they", "their", "them",
+        "not", "but", "can", "all", "one", "two", "out", "into", "has", "had", "been", "more",
+    }
+    for row in preview_rows:
+        text = str(row.get("text") or "").lower()
+        for token in re.findall(r"[a-z][a-z0-9_]{2,30}", text):
+            if token in stop_words:
+                continue
+            if token.startswith("http"):
+                continue
+            keyword_counts[token] += 1
+
+    interest_rows = [
+        f"{word} ({count})"
+        for word, count in keyword_counts.most_common(8)
+    ]
+
+    type_counts = Counter()
+    type_engagement = Counter()
+    for row in preview_rows:
+        text = str(row.get("text") or "").lower()
+        if "thread" in text or re.search(r"\b1/\d+\b", text):
+            tweet_type = "Threads"
+        elif any(token in text for token in ("video", "watch", "clip", "reel", "youtube", "youtu.be")):
+            tweet_type = "Videos"
+        elif any(token in text for token in ("image", "photo", "pic", "jpg", "png")):
+            tweet_type = "Images"
+        elif "poll" in text:
+            tweet_type = "Polls"
+        else:
+            tweet_type = "Text"
+
+        likes = _safe_int(row.get("likes"))
+        retweets = _safe_int(row.get("retweets"))
+        type_counts[tweet_type] += 1
+        type_engagement[tweet_type] += likes + retweets
+
+    tweet_type_rows = []
+    for tweet_type, count in type_counts.most_common():
+        avg_engagement = round(type_engagement[tweet_type] / count, 1) if count else 0.0
+        tweet_type_rows.append(
+            {
+                "label": tweet_type,
+                "count": count,
+                "avg_engagement": avg_engagement,
+                "value": count,
+            }
+        )
+
+    _scale_rows_for_pct(tweet_type_rows, "value", "pct", min_pct=12)
+
+    top_tweets = sorted(
+        preview_rows,
+        key=lambda row: _safe_int(row.get("likes")) + _safe_int(row.get("retweets")),
+        reverse=True,
+    )[:8]
+
+    for row in top_tweets:
+        row["date_short"] = str(row.get("date") or "")[:16].replace("T", " ")
+        row["engagement"] = _safe_int(row.get("likes")) + _safe_int(row.get("retweets"))
+
+    insights = []
+    if total_tweets > 0:
+        recent_total = sum(int(row.get("value") or 0) for row in trend_rows[-3:])
+        prior_total = sum(int(row.get("value") or 0) for row in trend_rows[-6:-3])
+        if prior_total == 0 and len(trend_rows) > 3:
+            prior_total = sum(int(row.get("value") or 0) for row in trend_rows[:-3])
+
+        top_sentiment_row = max(sentiment_rows, key=lambda row: int(row.get("count") or 0), default=None)
+        top_hour_row = max(hour_rows, key=lambda row: int(row.get("value") or 0), default=None)
+
+        insights.append(
+            f"{_format_compact_number(total_tweets)} tweets across {total_runs} runs "
+            f"({non_empty_runs} non-empty)."
+        )
+        if recent_total or prior_total:
+            insights.append(f"Recent activity trend: {_delta_label(recent_total, prior_total)} vs prior window.")
+        if top_sentiment_row:
+            insights.append(f"Top sentiment: {top_sentiment_row.get('label')} ({top_sentiment_row.get('pct')}%).")
+        if top_hour_row and int(top_hour_row.get("value") or 0) > 0:
+            insights.append(f"Peak posting window: {top_hour_row.get('label')} ({top_hour_row.get('value')} tweets).")
+        if hashtag_rows:
+            insights.append(f"Most used hashtag: {hashtag_rows[0]['tag']} ({hashtag_rows[0]['count']} uses).")
+    else:
+        insights = [
+            "No scraped tweets found in this workspace yet.",
+            "Run a new query from Dashboard to populate this page.",
+            "All analytics blocks will update automatically from your collected runs.",
+        ]
+
+    last_run_at = ""
+    if snapshot.get("recent_runs"):
+        last_run_at = str(snapshot["recent_runs"][0].get("updated_at") or "")
+
+    report_rows = [
+        {
+            "key": "dataset_snapshot",
+            "title": "Dataset Snapshot",
+            "description": (
+                f"{_format_compact_number(total_tweets)} tweets, "
+                f"{_format_compact_number(engagement_actions)} engagement actions, "
+                f"{len(event_rows)} active events."
+            ),
+            "schedule": f"Last run: {last_run_at or 'n/a'}",
+            "format": "CSV",
+        },
+        {
+            "key": "sentiment_breakdown",
+            "title": "Sentiment Breakdown",
+            "description": (
+                f"Positive {sentiment_rows[0]['pct']}%, "
+                f"Neutral {sentiment_rows[1]['pct']}%, "
+                f"Negative {sentiment_rows[2]['pct']}%."
+                if len(sentiment_rows) >= 3
+                else "Sentiment scores unavailable."
+            ),
+            "schedule": "On-demand",
+            "format": "CSV",
+        },
+        {
+            "key": "top_voices_topics",
+            "title": "Top Voices And Topics",
+            "description": (
+                f"{len(user_rows)} ranked users, {len(hashtag_rows)} hashtags, "
+                f"{len(language_rows)} language groups."
+            ),
+            "schedule": "On-demand",
+            "format": "CSV",
+        },
+    ]
+
+    return {
+        "workspace_dir": str(data_dir),
+        "sample_mode": total_tweets == 0,
+        "account_handle": account_handle,
+        "active_users_display": _format_compact_number(unique_users),
+        "total_tweets_display": _format_compact_number(total_tweets),
+        "delta_tweets_window": _delta_label(
+            sum(int(row.get("value") or 0) for row in trend_rows[-3:]),
+            sum(int(row.get("value") or 0) for row in trend_rows[-6:-3]),
+        ),
+        "overview_cards": overview_cards,
+        "trend_rows": trend_rows,
+        "sentiment_total": sentiment_total,
+        "sentiment_rows": sentiment_rows,
+        "sentiment_pie": sentiment_pie,
+        "hashtag_rows": hashtag_rows,
+        "follower_trend": follower_trend,
+        "hour_rows": hour_rows,
+        "insights": insights,
+        "language_rows": language_rows,
+        "user_rows": user_rows,
+        "country_rows": country_rows,
+        "event_rows": event_rows,
+        "interest_rows": interest_rows,
+        "tweet_type_rows": tweet_type_rows,
+        "top_tweets": top_tweets,
+        "report_rows": report_rows,
+    }
 
 
 def home(request):
@@ -780,6 +1290,82 @@ def dashboard(request):
 
 
 @login_required
+def twitter_analytics(request):
+    user_data_dir = _workspace_data_dir(request.user)
+    context = _build_twitter_analytics_context(user_data_dir)
+    return render(request, "viewer/twitter_analytics.html", context)
+
+
+@login_required
+def twitter_report_download(request, report_key):
+    user_data_dir = _workspace_data_dir(request.user)
+    snapshot = _dataset_snapshot("all", data_dir=user_data_dir)
+    context = _build_twitter_analytics_context(user_data_dir)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
+    if report_key == "dataset_snapshot":
+        rows = _collect_preview_tweets(
+            snapshot.get("event_names", []),
+            snapshot.get("selected_event", "all"),
+            None,
+            "",
+            "",
+            EXPORT_MAX_ROWS,
+            0,
+            user_data_dir,
+        )
+        header = [
+            "event",
+            "run_file",
+            "tweet_id",
+            "date",
+            "username",
+            "lang",
+            "likes",
+            "retweets",
+            "sentiment",
+            "compound",
+            "text",
+        ]
+        body = [
+            [
+                row.get("event"),
+                row.get("run_file"),
+                row.get("id"),
+                row.get("date"),
+                row.get("username"),
+                row.get("lang"),
+                row.get("likes"),
+                row.get("retweets"),
+                row.get("sentiment"),
+                row.get("compound"),
+                row.get("text"),
+            ]
+            for row in rows
+        ]
+        return _csv_download_response(f"twitter_dataset_snapshot_{timestamp}.csv", header, body)
+
+    if report_key == "sentiment_breakdown":
+        sentiment_rows = context.get("sentiment_rows", [])
+        header = ["sentiment", "count", "pct"]
+        body = [[row.get("label"), row.get("count"), row.get("pct")] for row in sentiment_rows]
+        return _csv_download_response(f"twitter_sentiment_breakdown_{timestamp}.csv", header, body)
+
+    if report_key == "top_voices_topics":
+        header = ["section", "label", "value"]
+        body = []
+        for row in context.get("user_rows", []):
+            body.append(["top_users", row.get("label"), row.get("value")])
+        for row in context.get("hashtag_rows", []):
+            body.append(["hashtags", row.get("tag"), row.get("count")])
+        for row in context.get("language_rows", []):
+            body.append(["languages", row.get("label"), row.get("value")])
+        return _csv_download_response(f"twitter_voices_topics_{timestamp}.csv", header, body)
+
+    raise Http404("Unknown report type")
+
+
+@login_required
 def collect_query(request):
     if request.method != "POST":
         return redirect("dashboard")
@@ -804,12 +1390,30 @@ def collect_query(request):
     token = (form.cleaned_data.get("bearer_token") or "").strip()
 
     try:
-        run_filename = _run_collection(query, since, until, event, token, user_data_dir)
+        run_filename, retry_meta = _run_collection_with_retry(query, since, until, event, token, user_data_dir)
+    except RateLimitDeferredError as exc:
+        reset_ts = exc.reset_ts if exc.reset_ts and exc.reset_ts > int(time.time()) else int(time.time() + (exc.retry_after or 60))
+        reset_iso = _rate_limit_reset_iso(reset_ts)
+        messages.error(
+            request,
+            "Collection paused by X API rate limit. "
+            f"Auto-retry waited {exc.waited_seconds}s over {exc.attempts} attempt(s). "
+            f"Next retry window: {reset_iso or reset_ts} UTC."
+        )
+        query_params = urlencode({"event": event, "rate_limit_reset": str(reset_ts)})
+        return redirect(f"{reverse('dashboard')}?{query_params}")
     except Exception as exc:
         messages.error(request, f"Collection failed: {exc}")
         return redirect(f"{reverse('dashboard')}?event={event}")
 
-    messages.success(request, f"Collection completed. New run: {run_filename}")
+    if retry_meta.get("attempts", 1) > 1:
+        messages.success(
+            request,
+            f"Collection completed after {retry_meta['attempts'] - 1} retry/retries "
+            f"(waited {retry_meta.get('waited_seconds', 0)}s). New run: {run_filename}"
+        )
+    else:
+        messages.success(request, f"Collection completed. New run: {run_filename}")
     return redirect("run_detail", event=event, filename=run_filename)
 
 

@@ -1,4 +1,12 @@
 (function () {
+  function prefersReducedMotionEnabled() {
+    try {
+      return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function parseNumber(value, fallback) {
     var parsed = parseFloat(value);
     if (Number.isNaN(parsed)) return fallback;
@@ -75,12 +83,80 @@
     return Math.max(0, indexFromStyle * 70);
   }
 
+  function prepareTypewriterCards(root, immediate) {
+    if (!root) return;
+    var cards = root.querySelectorAll("[data-typewriter-card]");
+    if (!cards.length) return;
+
+    cards.forEach(function (card) {
+      var targets = card.querySelectorAll("[data-type-target]");
+      targets.forEach(function (target) {
+        if (!target.dataset.fullText) {
+          target.dataset.fullText = target.textContent || "";
+        }
+        if (immediate) {
+          target.textContent = target.dataset.fullText;
+        } else {
+          target.textContent = "";
+        }
+        target.classList.remove("type-caret");
+      });
+      if (immediate) {
+        card.dataset.typePlayed = "1";
+      }
+    });
+  }
+
+  function runTypewriterCard(card, immediate) {
+    if (!card || !card.hasAttribute("data-typewriter-card")) return;
+    if (card.dataset.typePlayed === "1") return;
+    card.dataset.typePlayed = "1";
+
+    var targets = card.querySelectorAll("[data-type-target]");
+    if (!targets.length) return;
+
+    if (immediate) {
+      targets.forEach(function (target) {
+        target.textContent = target.dataset.fullText || target.textContent || "";
+        target.classList.remove("type-caret");
+      });
+      return;
+    }
+
+    function typeTarget(index) {
+      if (index >= targets.length) return;
+      var target = targets[index];
+      var fullText = target.dataset.fullText || "";
+      var speed = index === 0 ? 18 : 12;
+      var cursor = 0;
+      target.classList.add("type-caret");
+
+      function step() {
+        target.textContent = fullText.slice(0, cursor);
+        cursor += 1;
+        if (cursor <= fullText.length) {
+          window.setTimeout(step, speed);
+          return;
+        }
+        target.classList.remove("type-caret");
+        window.setTimeout(function () {
+          typeTarget(index + 1);
+        }, 80);
+      }
+
+      step();
+    }
+
+    typeTarget(0);
+  }
+
   function revealNode(node, immediate) {
     if (!node || node.dataset.revealed === "1") return;
     node.dataset.revealed = "1";
 
     var makeVisible = function () {
       node.classList.add("is-visible");
+      runTypewriterCard(node, immediate);
       if (node.hasAttribute("data-counter-group")) {
         node.querySelectorAll(".landing-counter[data-count-to]").forEach(function (counter) {
           animateCounter(counter, immediate);
@@ -103,16 +179,13 @@
     var root = document.querySelector("[data-landing-root]");
     if (!root) return;
 
-    var prefersReducedMotion = false;
-    try {
-      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    } catch (e) {
-      prefersReducedMotion = false;
-    }
+    var prefersReducedMotion = prefersReducedMotionEnabled();
 
     document.body.classList.add("landing-motion-ready");
     var revealNodes = root.querySelectorAll("[data-reveal]");
     if (!revealNodes.length) return;
+
+    prepareTypewriterCards(root, prefersReducedMotion);
 
     if (prefersReducedMotion || !("IntersectionObserver" in window)) {
       revealNodes.forEach(function (node) {
@@ -148,12 +221,7 @@
     var typedNodes = document.querySelectorAll(".typed[data-type-text]");
     if (!typedNodes.length) return;
 
-    var prefersReducedMotion = false;
-    try {
-      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    } catch (e) {
-      prefersReducedMotion = false;
-    }
+    var prefersReducedMotion = prefersReducedMotionEnabled();
 
     typedNodes.forEach(function (node) {
       if (node.dataset.typedInit === "1") return;
@@ -185,12 +253,7 @@
     var root = document.querySelector("[data-landing-root]");
     if (!root) return;
 
-    var prefersReducedMotion = false;
-    try {
-      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    } catch (e) {
-      prefersReducedMotion = false;
-    }
+    var prefersReducedMotion = prefersReducedMotionEnabled();
 
     root.querySelectorAll("[data-pie-progress]").forEach(function (ring) {
       if (ring.dataset.pieAnimated === "1") return;
@@ -239,12 +302,7 @@
     var cards = document.querySelectorAll("[data-tilt-card]");
     if (!cards.length) return;
 
-    var prefersReducedMotion = false;
-    try {
-      prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    } catch (e) {
-      prefersReducedMotion = false;
-    }
+    var prefersReducedMotion = prefersReducedMotionEnabled();
     if (prefersReducedMotion) return;
 
     cards.forEach(function (card) {
@@ -411,11 +469,51 @@
     reset();
   }
 
+  function formatCountdown(totalSeconds) {
+    var seconds = Math.max(0, Math.floor(totalSeconds));
+    var hours = Math.floor(seconds / 3600);
+    var minutes = Math.floor((seconds % 3600) / 60);
+    var secs = seconds % 60;
+
+    if (hours > 0) {
+      return hours + "h " + String(minutes).padStart(2, "0") + "m " + String(secs).padStart(2, "0") + "s";
+    }
+    return minutes + "m " + String(secs).padStart(2, "0") + "s";
+  }
+
+  function initRateLimitCountdown() {
+    var nodes = document.querySelectorAll("[data-countdown-until]");
+    if (!nodes.length) return;
+
+    nodes.forEach(function (node) {
+      var targetRaw = node.getAttribute("data-countdown-until") || "";
+      var target = parseInt(targetRaw, 10);
+      if (!target || Number.isNaN(target)) return;
+
+      function render() {
+        var now = Math.floor(Date.now() / 1000);
+        var remaining = target - now;
+        if (remaining <= 0) {
+          node.textContent = "ready now";
+          return false;
+        }
+        node.textContent = formatCountdown(remaining);
+        return true;
+      }
+
+      if (!render()) return;
+      var timer = window.setInterval(function () {
+        if (!render()) window.clearInterval(timer);
+      }, 1000);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initLandingMotion();
     initLandingCharts();
     initLandingType();
     initTiltCards();
     document.querySelectorAll(".sentiment-widget").forEach(initSentimentWidget);
+    initRateLimitCountdown();
   });
 })();

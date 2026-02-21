@@ -3,7 +3,8 @@
 {% block title %}PulseBoard | X Intelligence Platform{% endblock %}
 
 {% block content %}
-<section class="landing-hero" data-landing-root>
+<div data-landing-root>
+<section class="landing-hero">
     <div class="landing-orb orb-a" aria-hidden="true"></div>
     <div class="landing-orb orb-b" aria-hidden="true"></div>
     <div class="landing-grid">
@@ -140,9 +141,9 @@
     <h2>What This Tool Does</h2>
     <div class="landing-card-grid">
         {% for card in capability_cards %}
-            <article class="panel landing-card" data-reveal data-tilt-card style="--card-index: {{ forloop.counter0 }};">
-                <h3>{{ card.title }}</h3>
-                <p class="muted">{{ card.body }}</p>
+            <article class="panel landing-card" data-reveal data-tilt-card data-typewriter-card style="--card-index: {{ forloop.counter0 }};">
+                <h3 data-type-target>{{ card.title }}</h3>
+                <p class="muted" data-type-target>{{ card.body }}</p>
             </article>
         {% endfor %}
     </div>
@@ -183,4 +184,32 @@
         </div>
     </div>
 </section>
+
+<section class="landing-section landing-outro">
+    <div class="panel landing-outro-shell" data-reveal data-reveal-delay="70">
+        <p class="landing-kicker">Why PulseBoard</p>
+        <h2>Built for repeatable, high-signal decision workflows.</h2>
+        <p class="muted landing-outro-intro">
+            Move from one-off scraping to a reliable intelligence loop your team can run every week.
+        </p>
+        <div class="landing-outro-grid">
+            <article class="landing-outro-card" data-reveal data-reveal-delay="120">
+                <span class="outro-index">01</span>
+                <h3>Faster Topic Validation</h3>
+                <p class="muted">Test a narrative in minutes using sample and live event runs from one dashboard.</p>
+            </article>
+            <article class="landing-outro-card" data-reveal data-reveal-delay="180">
+                <span class="outro-index">02</span>
+                <h3>Consistent Sentiment Tracking</h3>
+                <p class="muted">Keep positivity, neutrality, and negative trend signals visible in one continuous stream.</p>
+            </article>
+            <article class="landing-outro-card" data-reveal data-reveal-delay="240">
+                <span class="outro-index">03</span>
+                <h3>Shareable Analyst Output</h3>
+                <p class="muted">Filter by sentiment and export focused tweet slices for reports and team decisions.</p>
+            </article>
+        </div>
+    </div>
+</section>
+</div>
 {% endblock %}

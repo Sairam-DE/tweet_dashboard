@@ -21,6 +21,7 @@
                     <span class="chip">{{ user.username }}</span>
                     <a class="btn btn-ghost" href="{% url 'home' %}">Overview</a>
                     <a class="btn btn-ghost" href="{% url 'dashboard' %}">Dashboard</a>
+                    <a class="btn btn-ghost" href="{% url 'twitter_analytics' %}">Twitter Analytics</a>
                     <a class="btn btn-ghost" href="{% url 'logout' %}">Logout</a>
                 {% else %}
                     <a class="btn btn-ghost" href="{% url 'home' %}">Overview</a>

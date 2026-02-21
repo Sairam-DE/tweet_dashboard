@@ -6,6 +6,8 @@ from . import views
 urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("twitter-analytics/", views.twitter_analytics, name="twitter_analytics"),
+    path("twitter-analytics/report/<str:report_key>/", views.twitter_report_download, name="twitter_report_download"),
     path("register/", views.register_view, name="register"),
     path(
         "login/",

@@ -64,6 +64,16 @@
         <p class="muted" style="margin-top: 6px;">
             Submit a scrape query directly from the UI. Requires valid X API token in server env or form override.
         </p>
+        {% if rate_limit_reset_ts %}
+            <div class="rate-limit-panel" data-rate-limit-panel>
+                <div class="rate-limit-title">X API rate limit active</div>
+                <p class="muted">
+                    Auto-retry deferred until <code>{{ rate_limit_reset_iso }}</code>.
+                    Time remaining:
+                    <strong class="countdown-value" data-countdown-until="{{ rate_limit_reset_ts }}">--</strong>
+                </p>
+            </div>
+        {% endif %}
         <form method="post" action="{% url 'collect_query' %}" style="margin-top:12px;">
             {% csrf_token %}
             <input type="hidden" name="event_filter" value="{{ selected_event }}">

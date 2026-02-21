@@ -1,0 +1,310 @@
+{% extends "viewer/base.html" %}
+
+{% block title %}Twitter Analytics | PulseBoard{% endblock %}
+
+{% block content %}
+<section class="twa-layout">
+    <aside class="panel twa-side">
+        <p class="landing-kicker">Twitter Analytics</p>
+        <h1>Brand Intelligence Desk</h1>
+        <p class="muted twa-side-sub">
+            Top account: <strong>{{ account_handle }}</strong> | Active users: <strong>{{ active_users_display }}</strong>
+        </p>
+        {% if sample_mode %}
+            <p class="muted twa-sample-note">
+                No scraped tweets yet. Run a collection query; this dashboard updates automatically from your data.
+            </p>
+        {% endif %}
+
+        <nav class="twa-links">
+            <a href="#twa-overview">Overview</a>
+            <a href="#twa-analytics">Analytics</a>
+            <a href="#twa-audience">Audience</a>
+            <a href="#twa-tweets">Tweets</a>
+            <a href="#twa-reports">Reports</a>
+        </nav>
+
+        <div class="twa-workspace">
+            <span class="pill">Workspace</span>
+            <code>{{ workspace_dir }}</code>
+        </div>
+    </aside>
+
+    <div class="twa-main">
+        <section id="twa-overview" class="panel twa-block">
+            <div class="twa-block-head">
+                <h2>Overview</h2>
+                <p class="muted">Twitter-native KPIs, sentiment split, and hashtag performance.</p>
+            </div>
+
+            <div class="twa-metric-grid">
+                {% for card in overview_cards %}
+                    <article class="twa-metric-card tone-{{ card.tone }}">
+                        <span class="twa-metric-label">{{ card.label }}</span>
+                        <strong class="twa-metric-value">{{ card.value_display }}</strong>
+                        <span class="twa-metric-delta">{{ card.delta }}</span>
+                    </article>
+                {% endfor %}
+            </div>
+
+            <div class="twa-overview-grid">
+                <article class="twa-subpanel">
+                    <h3>Trend Activity</h3>
+                    <div class="twa-trend-bars">
+                        {% for row in trend_rows %}
+                            <div class="twa-trend-bar">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-trend-track">
+                                    <div class="twa-trend-fill" style="height: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel">
+                    <h3>Sentiment</h3>
+                    <div class="twa-sentiment-wrap">
+                        <div class="twa-sentiment-pie" style="--pos: {{ sentiment_pie.pos }}%; --pos-neu: {{ sentiment_pie.pos_neu }}%;">
+                            <div class="twa-sentiment-core">
+                                <strong>{{ sentiment_total }}</strong>
+                                <small>tweets scored</small>
+                            </div>
+                        </div>
+                        <div class="twa-sentiment-bars">
+                            {% for row in sentiment_rows %}
+                                <div class="twa-line">
+                                    <span>{{ row.label }}</span>
+                                    <div class="twa-line-track">
+                                        <div class="twa-line-fill {{ row.css }}" style="width: {{ row.pct }}%;"></div>
+                                    </div>
+                                    <span>{{ row.pct }}%</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+
+                <article class="twa-subpanel twa-wide">
+                    <h3>Top Hashtags</h3>
+                    <div class="twa-tags">
+                        {% for row in hashtag_rows %}
+                            <span class="twa-tag">{{ row.tag }} <em>{{ row.count }}</em></span>
+                        {% empty %}
+                            <span class="muted">No hashtags found in current dataset.</span>
+                        {% endfor %}
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="twa-analytics" class="panel twa-block">
+            <div class="twa-block-head">
+                <h2>Analytics</h2>
+                <p class="muted">Follower change and engagement behavior by posting window.</p>
+            </div>
+
+            <div class="twa-analytics-grid">
+                <article class="twa-subpanel">
+                    <h3>Follower Growth (Gained vs Lost)</h3>
+                    <div class="twa-dual-list">
+                        {% for row in follower_trend %}
+                            <div class="twa-dual-row">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-dual-bars">
+                                    <div class="twa-dual-track">
+                                        <div class="twa-dual-fill gained" style="width: {{ row.gained_pct }}%;"></div>
+                                    </div>
+                                    <div class="twa-dual-track">
+                                        <div class="twa-dual-fill lost" style="width: {{ row.lost_pct }}%;"></div>
+                                    </div>
+                                </div>
+                                <span>+{{ row.gained }} / -{{ row.lost }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">Insufficient trend window to compute change.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel">
+                    <h3>Engagement By Time Of Day</h3>
+                    <div class="twa-line-list">
+                        {% for row in hour_rows %}
+                            <div class="twa-line">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-line-track">
+                                    <div class="twa-line-fill" style="width: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <ul class="twa-insights">
+                        {% for item in insights %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <section id="twa-audience" class="panel twa-block">
+            <div class="twa-block-head">
+                <h2>Audience</h2>
+                <p class="muted">Language, active users, event spread, and geography approximation from your scraped tweets.</p>
+            </div>
+
+            <div class="twa-audience-grid">
+                <article class="twa-subpanel">
+                    <h3>Top Languages</h3>
+                    <div class="twa-line-list">
+                        {% for row in language_rows %}
+                            <div class="twa-line">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-line-track">
+                                    <div class="twa-line-fill neu" style="width: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No language data available.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel">
+                    <h3>Most Active Users</h3>
+                    <div class="twa-line-list">
+                        {% for row in user_rows %}
+                            <div class="twa-line">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-line-track">
+                                    <div class="twa-line-fill pos" style="width: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No user activity ranking available.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel">
+                    <h3>Top Countries</h3>
+                    <div class="twa-line-list">
+                        {% for row in country_rows %}
+                            <div class="twa-line">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-line-track">
+                                    <div class="twa-line-fill neg" style="width: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.value }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No country approximation available.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel twa-wide">
+                    <h3>Top Events And Topics</h3>
+                    <div class="twa-tags">
+                        {% for row in event_rows %}
+                            <span class="twa-tag">{{ row.label }} <em>{{ row.value }}</em></span>
+                        {% endfor %}
+                        {% for interest in interest_rows %}
+                            <span class="twa-tag">{{ interest }}</span>
+                        {% endfor %}
+                        {% if not event_rows and not interest_rows %}
+                            <span class="muted">No event/topic tags available yet.</span>
+                        {% endif %}
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="twa-tweets" class="panel twa-block">
+            <div class="twa-block-head">
+                <h2>Tweets</h2>
+                <p class="muted">Tweet-type performance and high-engagement tweet samples.</p>
+            </div>
+
+            <div class="twa-analytics-grid">
+                <article class="twa-subpanel">
+                    <h3>Performance By Tweet Type</h3>
+                    <div class="twa-line-list">
+                        {% for row in tweet_type_rows %}
+                            <div class="twa-line">
+                                <span>{{ row.label }}</span>
+                                <div class="twa-line-track">
+                                    <div class="twa-line-fill" style="width: {{ row.pct }}%;"></div>
+                                </div>
+                                <span>{{ row.count }} | avg {{ row.avg_engagement }}</span>
+                            </div>
+                        {% empty %}
+                            <p class="muted">No tweet type breakdown available yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="twa-subpanel">
+                    <h3>Top Tweets</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Likes</th>
+                                    <th>Retweets</th>
+                                    <th>Text</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in top_tweets %}
+                                    <tr>
+                                        <td>{{ row.date_short }}</td>
+                                        <td>@{{ row.username }}</td>
+                                        <td>{{ row.likes }}</td>
+                                        <td>{{ row.retweets }}</td>
+                                        <td>{{ row.text }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="muted">No tweets available in dataset.</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="twa-reports" class="panel twa-block">
+            <div class="twa-block-head">
+                <h2>Reports</h2>
+                <p class="muted">Production-ready exports for analyst and leadership workflows.</p>
+            </div>
+            <div class="twa-report-grid">
+                {% for row in report_rows %}
+                    <article class="twa-report-card">
+                        <h3>{{ row.title }}</h3>
+                        <p class="muted">{{ row.description }}</p>
+                        <div class="twa-report-meta">
+                            <span class="pill">{{ row.format }}</span>
+                            <span class="pill">{{ row.schedule }}</span>
+                        </div>
+                        <div class="twa-report-actions">
+                            <a class="btn btn-primary" href="{% url 'twitter_report_download' row.key %}">Generate</a>
+                            <button type="button" class="btn btn-ghost" disabled title="Scheduling will be added next.">Schedule</button>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}
